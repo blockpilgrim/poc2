@@ -28,22 +28,22 @@ The Partner Portal v3.0 explores a decoupled SPA + API architecture to evaluate 
 ## Architecture Overview
 
 ### Frontend (Vite + React SPA)
-- **Build Tool**: Vite 6.x for lightning-fast HMR and optimized production builds
-- **Framework**: React 19 with TypeScript 5.x
-- **Routing**: React Router v6 for client-side navigation
-- **Styling**: Tailwind CSS v4 with shadcn/ui components (portable from Next.js)
-- **State Management**: 
+- **Build Tool**: Vite (latest stable version - verify before install)
+- **Framework**: React (latest stable version) with TypeScript (latest stable version)
+- **Routing**: React Router (latest stable version - currently v7.x) for client-side navigation
+- **Styling**: Tailwind CSS (latest stable version) with shadcn/ui components (portable from Next.js)
+- **State Management**:
   - Zustand for UI state with structured store architecture (portable from Next.js)
-  - TanStack Query v5 for server state (portable from Next.js)
+  - TanStack Query (latest stable version) for server state (portable from Next.js)
   - State persistence layer for user preferences and filters
   - Multi-tab synchronization for consistency
 - **Forms**: React Hook Form + Zod (portable from Next.js)
-- **Tables**: TanStack Table v8 (portable from Next.js)
+- **Tables**: TanStack Table (latest stable version) (portable from Next.js)
 - **Development**: Vite dev server with proxy to Express API
 - **Deployment**: Azure Static Web Apps
 
 ### Backend (Express API)
-- **Runtime**: Node.js 20+ with Express 5.x and TypeScript
+- **Runtime**: Node.js (latest LTS version - currently 22.x) with Express (latest stable version - currently 5.x) and TypeScript
 - **Authentication**: MSAL Node (official Microsoft library)
 - **API Design**: RESTful endpoints with OpenAPI documentation
 - **Validation**: Zod for request/response validation
@@ -131,7 +131,7 @@ The initiative field serves as a **hard security boundary**:
 ### POC Stage - Architecture Validation & Core Infrastructure
 
 #### Foundation Setup
-- [ ] Initialize Vite project with React 19 and TypeScript
+- [ ] Initialize Vite project with React (latest stable) and TypeScript (latest stable)
 - [ ] Initialize Express project with TypeScript
 - [ ] Set up project structure (controllers, services, middleware)
 - [ ] Create shared TypeScript types package
@@ -164,9 +164,9 @@ The initiative field serves as a **hard security boundary**:
 - [ ] Create /api/profile endpoint for user data
 
 #### Basic UI Foundation
-- [ ] Configure Tailwind CSS v4 and migrate design tokens
+- [ ] Configure Tailwind CSS (latest stable) and migrate design tokens
 - [ ] Port shadcn/ui components from Next.js
-- [ ] Set up React Router v6 with route structure
+- [ ] Set up React Router (latest stable - note: may require v6 to v7 migration) with route structure
 - [ ] Create initiative theme configuration system
 
 ### MVP Stage - Production-Ready Core Features
@@ -313,6 +313,24 @@ The initiative field serves as a **hard security boundary**:
 
 ## Development Approach
 
+### Version Management Strategy
+
+**Core Dependency Versions**: The major dependency versions specified in this charter have been verified as of the last charter update and are suitable for project initialization.
+
+**Feature-Specific Dependencies**: When implementing features that require new dependencies, verify latest stable versions before installation:
+
+1. **Web Search First**: Perform a web search to confirm the latest stable versions of new dependencies
+2. **Official Sources**: Check npm registry, official GitHub releases, and documentation
+3. **Avoid Assumptions**: Don't assume training data contains the latest versions
+4. **Document Versions**: Record specific versions in `VERSIONS.md` when installed
+
+Example verification process for new dependencies:
+```bash
+# Before adding new feature dependencies
+npm view [new-package]@latest version
+npm view [another-package]@latest version
+```
+
 ### Parallel Development Strategy
 
 Unlike the Next.js POC approach, the decoupled architecture allows for parallel frontend/backend development:
@@ -416,30 +434,30 @@ interface JWTPayload {
 
 // Query Key Factory with Initiative
 const queryKeys = {
-  leads: (initiative: string, filters?: LeadFilters) => 
+  leads: (initiative: string, filters?: LeadFilters) =>
     ['leads', initiative, filters] as const,
-  
-  lead: (initiative: string, id: string) => 
+
+  lead: (initiative: string, id: string) =>
     ['leads', initiative, id] as const,
 };
 
 // Backend Middleware
 const enforceInitiative = async (req, res, next) => {
   const userInitiative = req.user.initiative;
-  
+
   // Inject into all D365 queries
   req.d365Filter = {
     ...req.d365Filter,
     'initiative': userInitiative
   };
-  
+
   // Log access for audit
-  logger.info('Data access', { 
-    userId: req.user.sub, 
+  logger.info('Data access', {
+    userId: req.user.sub,
     initiative: userInitiative,
-    endpoint: req.path 
+    endpoint: req.path
   });
-  
+
   next();
 };
 
@@ -485,7 +503,7 @@ const initiativeThemes: Record<string, ThemeConfig> = {
 cd packages/frontend
 npm run dev              # Starts Vite dev server on port 5173
 
-# Backend development  
+# Backend development
 cd packages/backend
 npm run dev              # Starts Express with nodemon on port 3000
 
@@ -512,7 +530,7 @@ npm run dev:kentucky     # Test with Kentucky theme/data
 ### Technical Risks
 - **Risk**: Increased complexity from two codebases
   - **Mitigation**: Shared types, comprehensive documentation
-  
+
 - **Risk**: Authentication complexity in SPA
   - **Mitigation**: Well-tested auth library, clear patterns
 
@@ -537,14 +555,16 @@ npm run dev:kentucky     # Test with Kentucky theme/data
 
 ## Next Steps
 
-1. Set up base repositories with initial tooling
-2. Create shared types package with initiative definitions
-3. Implement structured Zustand store architecture
-4. Document state management and initiative patterns
-5. Build authentication POC with initiative support
-6. Create initiative filtering middleware
-7. Port core UI components with theme system
-8. Build first API endpoint with initiative enforcement
+1. Set up base repositories with initial tooling (using charter-specified versions)
+2. **Verify new dependency versions** through web searches when adding feature-specific packages
+3. Create shared types package with initiative definitions
+4. Implement structured Zustand store architecture
+5. Document state management and initiative patterns
+6. Build authentication POC with initiative support
+7. Create initiative filtering middleware
+8. Port core UI components with theme system
+9. Build first API endpoint with initiative enforcement
+10. Create `VERSIONS.md` to document all installed dependency versions
 
 ---
 
