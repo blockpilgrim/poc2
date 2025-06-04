@@ -657,7 +657,49 @@ Based on user requirements, the following D365 Contact fields will be used:
 - `tc_initiative` - User's initiative (security boundary)
 - `crda6_portalroles` - User's portal role(s) (Admin, Partner, User)
 
-### 🔄 Next Steps - Basic Initiative Support:
+### 🔄 Next Steps - Testing Authentication Flow:
+
+**Before proceeding with Basic Initiative Support, complete minimal authentication testing:**
+
+#### 1. Environment Setup
+- Copy `.env.example` to `.env` and configure:
+  - `AZURE_TENANT_ID`: Your Azure AD tenant ID
+  - `AZURE_CLIENT_ID`: Your app registration client ID
+  - `AZURE_CLIENT_SECRET`: Your app client secret
+  - `JWT_SECRET`: A secure secret for JWT signing
+- Azure AD App Registration requirements:
+  - Redirect URI: `http://localhost:3000/api/auth/callback`
+  - Enable "ID tokens" and "Access tokens" in Authentication settings
+  - Grant User.Read permission for Microsoft Graph
+
+#### 2. Test Authentication Endpoints
+1. Start server: `cd packages/backend && npm run dev`
+2. Test health check: `curl http://localhost:3000/api/health`
+3. Get auth config: `curl http://localhost:3000/api/auth/config`
+4. Initiate login flow:
+   ```bash
+   curl -X POST http://localhost:3000/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"redirectUrl": "http://localhost:5173/dashboard"}'
+   ```
+5. Copy the `authUrl` from response and complete Azure AD login in browser
+6. After callback, test protected endpoint with received JWT:
+   ```bash
+   curl http://localhost:3000/api/auth/me \
+     -H "Authorization: Bearer YOUR_JWT_TOKEN"
+   ```
+
+#### 3. Verify JWT Structure
+- Decode token at [jwt.io](https://jwt.io) or use `jwt-cli`
+- Confirm payload matches `ExtendedJWTPayload` interface
+- Verify mandatory `initiative` claim is present
+
+#### 4. Known Testing Limitations
+- D365 service returns stub data (may need to temporarily bypass for testing)
+- PKCE state management requires full flow testing
+- Consider creating test script for automated validation
+
+### 🔄 After Testing - Basic Initiative Support:
 
 **1. Define Initiative Type and Theme Contracts**
 - Review and refine Initiative interface in shared package
