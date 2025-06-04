@@ -1,17 +1,26 @@
-# Partner Portal v3.0 (Vite + React + Express) - Project Charter
+# Partner Portal v2.0 (Vite + React + Express) - Project Charter
 
 ## Project Overview
 
-This document serves as a comprehensive guide for developing the Partner Portal v3.0 using a decoupled architecture with Vite + React (frontend) and Express (backend). This approach explores an alternative to the Next.js implementation, optimizing for clear separation of concerns, deployment flexibility, and API-first design.
+This document serves as a comprehensive guide for developing the Partner Portal v2.0. The project transitions from our current model of disparate, cloned Power Pages instances to a **single, centralized platform** built using a decoupled architecture with Vite + React (frontend) and Express.js (backend).
+
+This strategic shift is driven by the critical need to overcome the scalability limitations, maintenance overhead, and branding inflexibility inherent in the previous multi-instance approach. Partner Portal v2.0 aims to deliver a unified, scalable, and maintainable solution that efficiently supports our expanding operations across multiple U.S. states, each represented as an "Initiative."
+
+A core tenet of this project is to **preserve and potentially enhance the existing lead management capabilities** currently valued by our external partner organizations. This includes secure access to assigned leads, comprehensive dashboard views with filtering and search, detailed lead information management, and role-based access control tailored to their organizational context (e.g., Foster/Volunteer).
+
+The new architecture, detailed herein, emphasizes clear separation of concerns, API-first design, robust security through initiative-based data segregation, and dynamic theming. This will provide a modern, reliable, and intuitive interface for our partners, significantly reducing operational burdens and accelerating the delivery of future improvements.
 
 ### Purpose
 
-The Partner Portal v3.0 explores a decoupled SPA + API architecture to evaluate potential benefits in:
-- **Clear Separation**: Distinct frontend/backend codebases with defined contracts
-- **Independent Scaling**: Frontend and backend can scale independently
-- **API Reusability**: Backend API can serve multiple frontends (web, mobile, etc.)
-- **Technology Flexibility**: Teams can work with specialized tooling for each layer
-- **Deployment Options**: Static hosting for frontend, flexible backend deployment
+The Partner Portal v2.0 project implements a decoupled Single Page Application (SPA) + API architecture to serve as a Proof of Concept (POC) and foundational platform. This POC aims to:
+
+* **Validate Architecture:** Demonstrate that a Vite + React frontend and an Express.js backend can effectively meet our organization's requirements for a centralized, scalable, and maintainable multi-state partner portal.
+* **Deliver Core Functionality:** Build essential features focused on secure authentication, initiative-based data segregation, dynamic theming, and core lead management capabilities.
+* **Establish Best Practices:** Implement and refine development patterns, security measures, and deployment strategies for this new architecture.
+* **Mitigate Scalability Risks:** Directly address the limitations of the current "cloned instance" model by proving a single platform's ability to support multiple U.S. state "initiatives" with distinct branding and data boundaries.
+* **Enhance Developer Experience:** Leverage modern tooling and a clear separation of concerns to improve development velocity and knowledge sharing.
+
+This initiative will confirm the chosen technology stack's suitability to replace the existing Power Pages solution, providing a robust foundation for future enhancements and national rollout.
 
 ### Guiding Principles
 
@@ -26,6 +35,8 @@ The Partner Portal v3.0 explores a decoupled SPA + API architecture to evaluate 
 - **Efficiency**: Eliminate redundant processes and optimize for both development velocity and system performance
 
 ## Architecture Overview
+
+**Important Note for AI Agents:** This document contains references such as "(portable from Next.js)" or "(adapted from Next.js)". These allude to components and logic from a previous, internal Next.js prototype. You do not require any further context or code from this Next.js prototype to understand and assist with the goals of this current Vite + React + Express project. These notes primarily serve as reminders for the human developer leading this project.
 
 ### Frontend (Vite + React SPA)
 - **Build Tool**: Vite (latest stable version - verify before install)
@@ -515,6 +526,42 @@ npm run dev:arkansas     # Test with Arkansas theme/data
 npm run dev:kentucky     # Test with Kentucky theme/data
 ```
 
+## Non-Functional Requirements (NFRs) Summary
+
+Beyond specific features, Partner Portal v2.0 must adhere to the following key non-functional requirements to ensure its success and long-term viability:
+
+* **Scalability:**
+    * Support a growing number of "Initiatives" (target: 50+ U.S. states) without degradation in performance or requiring separate deployments.
+    * Handle a significant number of concurrent users (target: 1000+) efficiently.
+    * Allow independent scaling of frontend and backend services.
+* **Performance:**
+    * Initial application load time: < 2 seconds.
+    * Route transitions and data interactions: < 500 milliseconds.
+    * Efficient data handling for large datasets on dashboards (e.g., tables with 1000+ records).
+* **Maintainability:**
+    * Single codebase for core platform logic, minimizing redundancy (target: <15% code duplication across initiative-specific configurations).
+    * Modular design with clear separation of concerns (frontend, backend, shared types).
+    * Comprehensive documentation for code, APIs, and operational procedures.
+    * High test coverage (unit, integration, E2E) to facilitate safe and rapid changes.
+* **Security:**
+    * Strict enforcement of "Initiative" as a hard security boundary, preventing any cross-initiative data access.
+    * Secure authentication via Azure AD (MSAL Node).
+    * Protection against common web vulnerabilities (OWASP Top 10).
+    * Role-based access control (RBAC) ensuring users only access features and data relevant to their roles and initiative.
+    * Data encryption in transit (HTTPS) and at rest where applicable.
+* **Availability & Reliability:**
+    * High availability for both frontend and backend services (target: 99.9% uptime).
+    * Fault-tolerant design with robust error handling and logging.
+    * Consistent user experience with graceful degradation if partial service outages occur.
+* **Usability & Accessibility:**
+    * Intuitive user interface requiring minimal training for partners.
+    * Responsive design for accessibility across common desktop screen resolutions.
+    * Adherence to basic web accessibility guidelines (e.g., WCAG A/AA where feasible).
+* **Developer Experience:**
+    * Streamlined local development setup (target: < 5 minutes to run).
+    * Fast build times and hot module reloading for frontend and backend.
+    * Clear CI/CD pipelines for automated testing and deployment.
+
 ## Success Metrics
 
 - **Performance**: Sub-2s initial load, <500ms route transitions
@@ -553,18 +600,9 @@ npm run dev:kentucky     # Test with Kentucky theme/data
 - **Risk**: Initiative configuration errors
   - **Mitigation**: Automated validation, staging environments per initiative
 
-## Next Steps
+## Current Focus Area
 
-1. Set up base repositories with initial tooling (using charter-specified versions)
-2. **Verify new dependency versions** through web searches when adding feature-specific packages
-3. Create shared types package with initiative definitions
-4. Implement structured Zustand store architecture
-5. Document state management and initiative patterns
-6. Build authentication POC with initiative support
-7. Create initiative filtering middleware
-8. Port core UI components with theme system
-9. Build first API endpoint with initiative enforcement
-10. Create `VERSIONS.md` to document all installed dependency versions
+Refining this document in preparation to begin development.
 
 ---
 
