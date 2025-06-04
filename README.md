@@ -24,7 +24,7 @@ npm run docker:up
 ## Project Structure
 
 ```
-partner-portal-v2/
+poc-portal-2/
 ├── packages/
 │   ├── frontend/       # Vite + React SPA
 │   ├── backend/        # Express.js API

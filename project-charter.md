@@ -354,7 +354,7 @@ Unlike the Next.js POC approach, the decoupled architecture allows for parallel 
 ### Project Structure
 
 ```
-partner-portal-v3/
+poc-portal-2/
 ├── packages/
 │   ├── frontend/               # Vite + React SPA
 │   │   ├── src/
