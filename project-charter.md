@@ -604,7 +604,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 **Phase:** POC Stage - Core Authentication Flow (In Progress)
 
-**Status:** Phase 1, Step 1 Complete - MSAL Node Configuration implemented with JWT service including critical initiative claims.
+**Status:** Phase 1, Step 2 Complete - Token Validation Middleware implemented with comprehensive security enforcement.
 
 ### ✅ Completed Items:
 
@@ -625,6 +625,15 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
    - **D365 Service** (`d365.service.ts`) - Stub for user/initiative lookup
    - Added dependencies: @azure/msal-node, jsonwebtoken
 
+4. **Token Validation Middleware** (auth-2) ✓
+   - Created `auth.middleware.ts` with JWT verification
+   - Enforces initiative claims as security boundary
+   - Attaches user context to Express requests
+   - Graceful error handling for expired/invalid tokens
+   - Additional middleware: `optionalAuth`, `requireRoles`, `requireInitiatives`
+   - Token refresh mechanism for tokens near expiration
+   - Created `AppError` utility class for consistent error handling
+
 ### 📍 D365 Field Mapping Confirmed:
 Based on user requirements, the following D365 Contact fields will be used:
 - `msevtmgt_aadobjectid` - Azure AD Object ID for Contact lookup
@@ -633,20 +642,14 @@ Based on user requirements, the following D365 Contact fields will be used:
 
 ### 🔄 Next Steps - Phase 1 Continuation:
 
-**2. Token Validation Middleware** (auth-2) - Next Priority
-- Create JWT verification middleware
-- Extract and validate initiative claims
-- Attach user context to Express request
-- Handle token expiration gracefully
-
-**3. Authentication Endpoints** (auth-3)
+**1. Authentication Endpoints** (auth-3) - Next Priority
 - `/api/auth/login` - Initiate Azure AD login with PKCE
 - `/api/auth/callback` - Handle OAuth callback, fetch user from D365
 - `/api/auth/logout` - Clear sessions and redirect to Azure AD logout
 - `/api/auth/refresh` - Refresh token endpoint
 - `/api/auth/me` - Return current user with initiative
 
-**4. D365 Integration Updates**
+**2. D365 Integration Updates**
 - Update D365 service to query by `msevtmgt_aadobjectid`
 - Map `tc_initiative` and `crda6_portalroles` fields
 - Handle multiple roles if field is multi-select
