@@ -108,6 +108,8 @@ export class AuthController {
       );
 
       // Prepare redirect URL with tokens
+      // REAL: JWT tokens with initiative security boundary enforced
+      // REAL: Redirect URL handling for frontend integration
       const frontendRedirect = new URL(
         session.redirectUrl || config.FRONTEND_URL
       );

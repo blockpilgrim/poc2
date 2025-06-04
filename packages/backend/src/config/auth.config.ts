@@ -64,8 +64,39 @@ export const msalConfig: Configuration = {
       piiLoggingEnabled: false,
       logLevel: getMsalLogLevel(),
     },
-    // Network configuration
-    networkClient: undefined, // Use default network client
+    // Network configuration - MSAL Node requires explicit network client
+    networkClient: {
+      sendGetRequestAsync: async (url: string, options?: any) => {
+        const response = await fetch(url, { method: 'GET', ...options });
+        const bodyText = await response.text();
+        let parsedBody;
+        try {
+          parsedBody = JSON.parse(bodyText);
+        } catch {
+          parsedBody = bodyText;
+        }
+        return {
+          headers: Object.fromEntries(response.headers.entries()),
+          body: parsedBody,
+          status: response.status
+        };
+      },
+      sendPostRequestAsync: async (url: string, options?: any) => {
+        const response = await fetch(url, { method: 'POST', ...options });
+        const bodyText = await response.text();
+        let parsedBody;
+        try {
+          parsedBody = JSON.parse(bodyText);
+        } catch {
+          parsedBody = bodyText;
+        }
+        return {
+          headers: Object.fromEntries(response.headers.entries()),
+          body: parsedBody,
+          status: response.status
+        };
+      }
+    },
     // Proxy configuration (if needed in production)
     proxyUrl: process.env.HTTP_PROXY || process.env.HTTPS_PROXY || undefined,
   },
@@ -73,7 +104,7 @@ export const msalConfig: Configuration = {
 
 // Redirect URIs for authentication flows
 export const authConfig = {
-  redirectUri: config.AZURE_REDIRECT_URI || `${config.FRONTEND_URL}/auth/callback`,
+  redirectUri: config.AZURE_REDIRECT_URI || `http://localhost:${config.PORT}/api/auth/callback`,
   postLogoutRedirectUri: `${config.FRONTEND_URL}/`,
   
   // Scopes for Microsoft Graph API (to fetch user profile)

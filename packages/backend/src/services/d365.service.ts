@@ -4,7 +4,20 @@ import { authService } from './auth.service';
 
 /**
  * D365 Service for fetching user and initiative data
- * This is a stub implementation - will be replaced with actual D365 integration
+ * 
+ * CURRENT STATE: Stub implementation with simulated data
+ * - Uses hardcoded initiative assignments and roles
+ * - Returns test theme configurations
+ * - Simulates user permissions based on email patterns
+ * 
+ * PRODUCTION TRANSITION STEPS:
+ * 1. Configure D365 environment variables (D365_URL, D365_CLIENT_ID, D365_CLIENT_SECRET)
+ * 2. Implement Contact lookup by msevtmgt_aadobjectid (Azure AD Object ID)
+ * 3. Extract tc_initiative field from Contact record
+ * 4. Parse crda6_portalroles field (may be multi-select)
+ * 5. Query Initiative entity for theme configuration
+ * 6. Map D365 roles to application permissions
+ * 7. Replace stub data with actual D365 queries
  */
 export class D365Service {
   constructor() {
@@ -15,22 +28,24 @@ export class D365Service {
   /**
    * Fetch user's Contact record from D365 and extract initiative
    * CRITICAL: This is where we determine the user's security boundary
+   * 
+   * REAL DATA: email parameter (from Azure AD authentication)
+   * SIMULATED DATA: initiative assignment, roles, permissions, theme config
+   * 
+   * PRODUCTION IMPLEMENTATION:
+   * const contact = await this.queryContactByAzureId(azureObjectId, d365Token);
+   * const initiative = await this.queryInitiative(contact.tc_initiative, d365Token);
+   * const roles = this.parsePortalRoles(contact.crda6_portalroles);
    */
   async getUserWithInitiative(email: string, _d365Token: string): Promise<{
     user: User;
     initiative: Initiative;
   }> {
-    // TODO: Implement actual D365 query
-    // This would typically:
-    // 1. Query contacts by email
-    // 2. Extract initiative field
-    // 3. Query initiative details
-    // 4. Build user object with roles and permissions
-
-    console.log(`Fetching D365 Contact for email: ${email}`);
+    console.log(`[STUB] Fetching D365 Contact for email: ${email}`);
+    console.log(`[STUB] In production: Query Contact by msevtmgt_aadobjectid`);
     
-    // Stub implementation for development
-    // Maps specific test emails to initiatives
+    // STUB: Hardcoded initiative assignments for development testing
+    // PRODUCTION: Extract from contact.tc_initiative field
     let initiativeData: Initiative;
     let userRoles: string[] = ['partner'];
     
@@ -67,7 +82,9 @@ export class D365Service {
         updatedAt: new Date()
       };
     } else {
-      // Default to Arkansas for development
+      // STUB: Default to Arkansas for any unmatched email during development
+      // PRODUCTION: Throw error if no initiative found - security requirement
+      console.log(`[STUB] No specific initiative mapping, defaulting to Arkansas`);
       initiativeData = {
         id: 'ec-arkansas',
         name: 'EC Arkansas',
@@ -85,8 +102,10 @@ export class D365Service {
       };
     }
 
-    // Check for admin users
+    // STUB: Simple admin detection for development
+    // PRODUCTION: Parse contact.crda6_portalroles field (multi-select picklist)
     if (email.includes('admin')) {
+      console.log(`[STUB] Detected admin user pattern, adding admin role`);
       userRoles = ['partner', 'admin'];
     }
 
@@ -162,6 +181,43 @@ export class D365Service {
    */
   async getAccessToken(): Promise<string | null> {
     return authService.getD365AccessToken();
+  }
+
+  /**
+   * PRODUCTION READY METHODS - Implement these to replace stub data
+   */
+
+  /**
+   * Query Contact record by Azure AD Object ID
+   * FIELD MAPPING: msevtmgt_aadobjectid = Azure AD user.oid
+   */
+  private async queryContactByAzureId(azureObjectId: string, d365Token: string): Promise<any> {
+    // TODO: Implement D365 Web API call
+    // GET /api/data/v9.1/contacts?$filter=msevtmgt_aadobjectid eq '${azureObjectId}'
+    // &$select=contactid,emailaddress1,firstname,lastname,tc_initiative,crda6_portalroles
+    throw new Error('Production method not implemented - currently using stub data');
+  }
+
+  /**
+   * Query Initiative entity for theme configuration
+   * FIELD MAPPING: tc_initiative field references Initiative entity
+   */
+  private async queryInitiative(initiativeId: string, d365Token: string): Promise<Initiative> {
+    // TODO: Implement D365 Web API call for Initiative entity
+    // GET /api/data/v9.1/tc_initiatives(${initiativeId})
+    // Map D365 fields to Initiative interface
+    throw new Error('Production method not implemented - currently using stub data');
+  }
+
+  /**
+   * Parse portal roles from D365 multi-select picklist
+   * FIELD MAPPING: crda6_portalroles may contain multiple values
+   */
+  private parsePortalRoles(portalRolesValue: string | null): string[] {
+    // TODO: Parse D365 multi-select picklist format
+    // Handle comma-separated values or numeric option set values
+    if (!portalRolesValue) return ['partner']; // Default role
+    return portalRolesValue.split(',').map(r => r.trim().toLowerCase());
   }
 }
 
