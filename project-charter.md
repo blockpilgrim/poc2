@@ -152,11 +152,11 @@ The initiative field serves as a **hard security boundary**:
 - [ ] Create development docker-compose setup
 
 #### Core Authentication Flow
-- [ ] Configure MSAL Node for Azure AD authentication
+- [x] Configure MSAL Node for Azure AD authentication
 - [ ] Implement token validation middleware
 - [ ] Create authentication endpoints (/auth/login, /auth/callback, /auth/logout)
-- [ ] Implement JWT generation for API access
-- [ ] **CRITICAL**: Include initiative in JWT claims
+- [x] Implement JWT generation for API access
+- [x] **CRITICAL**: Include initiative in JWT claims
 - [ ] Implement authentication context/provider
 - [ ] Create login/logout flows with MSAL redirect
 - [ ] Implement token management and refresh
@@ -602,57 +602,61 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** POC Stage - Foundation Complete, Moving to Core Authentication
+**Phase:** POC Stage - Core Authentication Flow (In Progress)
 
-**Objective:** Foundation Setup is now complete (except Docker setup). Here's what was accomplished:
+**Status:** Phase 1, Step 1 Complete - MSAL Node Configuration implemented with JWT service including critical initiative claims.
 
-### ✅ Completed Foundation Setup Tasks:
+### ✅ Completed Items:
 
-1. **Express Backend with TypeScript**
-   - Created Express app with TypeScript configuration
-   - Configured security middleware (Helmet, CORS, compression)
-   - Set up environment variables with Zod validation
-   - Implemented error handling and request logging middleware
+1. **MSAL Node Configuration** (auth-1) ✓
+   - Created `auth.config.ts` with MSAL confidential client setup
+   - Environment variable validation for Azure AD credentials
+   - Configured OAuth redirect URIs and scopes
 
-2. **Backend Project Structure**
-   - `/src/controllers/` - Health controller implemented
-   - `/src/middleware/` - Error handler, request logger, async handler
-   - `/src/routes/` - Health routes and API router structure
-   - `/src/config/` - Environment configuration with type-safe validation
-   - `/src/services/` - Ready for business logic implementation
-   - `/src/models/` - Ready for data models
-   - `/src/utils/` - Ready for utilities
-   - `/tests/` - Ready for test implementation
+2. **JWT Token Generation** (auth-4 + auth-5) ✓
+   - JWT service with **mandatory initiative claims**
+   - Access tokens (15min) and refresh tokens (7d)
+   - Initiative validation enforced - tokens cannot be generated without initiative
+   - HS256 algorithm (Note: Consider RS256 for production)
 
-3. **Shared TypeScript Types Package**
-   - Comprehensive type definitions created:
-     - **Initiative types** - Critical security boundary definitions
-     - **Auth types** - JWT payload structure with initiative claims
-     - **User types** - Roles and permissions system
-     - **API types** - Response formats, pagination, and error structures
-     - **Lead types** - Complete lead management data structures
-   - Zod schemas for runtime validation
-   - Constants for initiatives and role-based permissions
-   - Both frontend and backend configured to use shared types
+3. **Supporting Services Created:**
+   - **Auth Service** (`auth.service.ts`) - MSAL wrapper with PKCE support
+   - **Session Service** (`session.service.ts`) - OAuth flow state management
+   - **D365 Service** (`d365.service.ts`) - Stub for user/initiative lookup
+   - Added dependencies: @azure/msal-node, jsonwebtoken
 
-4. **Vite Development Proxy Configuration**
-   - Enhanced proxy configuration with environment variable support
-   - Created API service with axios interceptors
-   - Implemented auth token management
-   - Configured code splitting for optimized production builds
+### 📍 D365 Field Mapping Confirmed:
+Based on user requirements, the following D365 Contact fields will be used:
+- `msevtmgt_aadobjectid` - Azure AD Object ID for Contact lookup
+- `tc_initiative` - User's initiative (security boundary)
+- `crda6_portalroles` - User's portal role(s) (Admin, Partner, User)
 
-5. **Health Check Endpoints**
-   - Basic health check at `/api/health`
-   - Detailed health check at `/api/health/detailed` with system metrics
-   - Service status monitoring for future integrations
+### 🔄 Next Steps - Phase 1 Continuation:
 
-### 🔄 Remaining Foundation Task:
-- Docker Compose setup (deferred to later as not critical for initial development)
+**2. Token Validation Middleware** (auth-2) - Next Priority
+- Create JWT verification middleware
+- Extract and validate initiative claims
+- Attach user context to Express request
+- Handle token expiration gracefully
 
-### 📍 Next Focus: Core Authentication Flow
-Ready to begin implementing MSAL Node authentication, JWT token generation with initiative claims, and authentication middleware.
+**3. Authentication Endpoints** (auth-3)
+- `/api/auth/login` - Initiate Azure AD login with PKCE
+- `/api/auth/callback` - Handle OAuth callback, fetch user from D365
+- `/api/auth/logout` - Clear sessions and redirect to Azure AD logout
+- `/api/auth/refresh` - Refresh token endpoint
+- `/api/auth/me` - Return current user with initiative
 
-**Status:** Foundation Setup 87.5% complete (7/8 tasks). Ready to proceed with Core Authentication Flow implementation.
+**4. D365 Integration Updates**
+- Update D365 service to query by `msevtmgt_aadobjectid`
+- Map `tc_initiative` and `crda6_portalroles` fields
+- Handle multiple roles if field is multi-select
+
+### Implementation Notes:
+- Initiative security boundary is enforced at token generation
+- PKCE parameters secured in session service
+- Test users mapped to initiatives for development
+- Environment example file created for easy setup
+
 
 ---
 
