@@ -1,13 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { jwtService } from '../services/jwt.service';
-import { JWTPayload } from '@poc-portal/shared';
+import { ExtendedJWTPayload } from '../types/auth';
 import { AppError } from '../utils/errors';
 
 // Extend Express Request type to include authenticated user
 declare global {
   namespace Express {
     interface Request {
-      user?: JWTPayload;
+      user?: ExtendedJWTPayload;
       token?: string;
     }
   }
@@ -31,7 +31,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     }
 
     // Validate the access token
-    const decoded = jwtService.validateAccessToken(token);
+    const decoded = jwtService.verifyAccessToken(token);
     
     if (!decoded) {
       throw new AppError('Invalid or expired token', 401);
@@ -96,7 +96,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
  * If a valid token is present, it will be validated and user attached
  * If no token is present, the request continues without user context
  */
-export const optionalAuth = (req: Request, res: Response, next: NextFunction) => {
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.startsWith('Bearer ') 
     ? authHeader.substring(7) 
@@ -108,7 +108,7 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
   }
 
   try {
-    const decoded = jwtService.validateAccessToken(token);
+    const decoded = jwtService.verifyAccessToken(token);
     
     if (decoded && decoded.initiative) {
       req.user = decoded;
@@ -129,12 +129,13 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
  * @param allowedRoles - Array of roles that are allowed access
  */
 export const requireRoles = (...allowedRoles: string[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      return res.status(401).json({
+      res.status(401).json({
         error: 'Authentication required',
         code: 'UNAUTHORIZED'
       });
+      return;
     }
 
     const userRoles = req.user.roles || [];
@@ -148,10 +149,11 @@ export const requireRoles = (...allowedRoles: string[]) => {
         path: req.path
       });
 
-      return res.status(403).json({
+      res.status(403).json({
         error: 'Insufficient permissions',
         code: 'FORBIDDEN'
       });
+      return;
     }
 
     next();
@@ -165,12 +167,13 @@ export const requireRoles = (...allowedRoles: string[]) => {
  * @param allowedInitiatives - Array of initiatives that are allowed access
  */
 export const requireInitiatives = (...allowedInitiatives: string[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      return res.status(401).json({
+      res.status(401).json({
         error: 'Authentication required',
         code: 'UNAUTHORIZED'
       });
+      return;
     }
 
     if (!allowedInitiatives.includes(req.user.initiative)) {
@@ -181,10 +184,11 @@ export const requireInitiatives = (...allowedInitiatives: string[]) => {
         path: req.path
       });
 
-      return res.status(403).json({
+      res.status(403).json({
         error: 'Access denied for this initiative',
         code: 'FORBIDDEN'
       });
+      return;
     }
 
     next();
@@ -212,16 +216,12 @@ export const refreshTokenIfNeeded = (req: Request, res: Response, next: NextFunc
 
     // If token expires in less than 5 minutes, refresh it
     if (expiresIn < 300) {
-      const newToken = jwtService.generateAccessToken({
-        sub: req.user.sub,
-        email: req.user.email,
-        initiative: req.user.initiative,
-        roles: req.user.roles
-      });
-
-      // Send new token in response header
-      res.setHeader('X-New-Token', newToken);
-      console.log('Token refreshed for user:', req.user.email);
+      // TODO: Implement token refresh with proper user/initiative/account data
+      // This would require storing more context about the user session
+      console.log('Token expiring soon for user:', req.user.email);
+      
+      // For now, just let the client handle token refresh via /auth/refresh endpoint
+      res.setHeader('X-Token-Expiring-Soon', 'true');
     }
   } catch (error) {
     // Log error but don't fail the request

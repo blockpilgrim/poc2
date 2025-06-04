@@ -1,4 +1,4 @@
-import { config } from '../config';
+// import { config } from '../config';  // Will be used when D365 integration is implemented
 import type { User, Initiative } from '@partner-portal/shared';
 import { authService } from './auth.service';
 
@@ -7,17 +7,16 @@ import { authService } from './auth.service';
  * This is a stub implementation - will be replaced with actual D365 integration
  */
 export class D365Service {
-  private baseUrl: string | undefined;
-
   constructor() {
-    this.baseUrl = config.D365_URL;
+    // D365 URL will be used when actual implementation is added
+    // config.D365_URL is available when needed
   }
 
   /**
    * Fetch user's Contact record from D365 and extract initiative
    * CRITICAL: This is where we determine the user's security boundary
    */
-  async getUserWithInitiative(email: string, d365Token: string): Promise<{
+  async getUserWithInitiative(email: string, _d365Token: string): Promise<{
     user: User;
     initiative: Initiative;
   }> {
@@ -39,47 +38,50 @@ export class D365Service {
       initiativeData = {
         id: 'ec-arkansas',
         name: 'EC Arkansas',
-        code: 'EC_AR',
+        stateCode: 'AR',
+        displayName: 'Arkansas Partner Portal',
         theme: {
           primaryColor: '#DA291C',
           secondaryColor: '#FFFFFF',
-          logoUrl: '/logos/arkansas.svg',
-          faviconUrl: '/favicons/arkansas.ico'
+          logo: '/logos/arkansas.svg',
+          favicon: '/favicons/arkansas.ico'
         },
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
     } else if (email.includes('kentucky') || email.endsWith('@ky.test')) {
       initiativeData = {
         id: 'ec-kentucky',
         name: 'EC Kentucky',
-        code: 'EC_KY',
+        stateCode: 'KY',
+        displayName: 'Kentucky Partner Portal',
         theme: {
           primaryColor: '#003F87',
           secondaryColor: '#FFD700',
-          logoUrl: '/logos/kentucky.svg',
-          faviconUrl: '/favicons/kentucky.ico'
+          logo: '/logos/kentucky.svg',
+          favicon: '/favicons/kentucky.ico'
         },
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
     } else {
       // Default to Arkansas for development
       initiativeData = {
         id: 'ec-arkansas',
         name: 'EC Arkansas',
-        code: 'EC_AR',
+        stateCode: 'AR',
+        displayName: 'Arkansas Partner Portal',
         theme: {
           primaryColor: '#DA291C',
           secondaryColor: '#FFFFFF',
-          logoUrl: '/logos/arkansas.svg',
-          faviconUrl: '/favicons/arkansas.ico'
+          logo: '/logos/arkansas.svg',
+          favicon: '/favicons/arkansas.ico'
         },
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
     }
 
@@ -88,18 +90,31 @@ export class D365Service {
       userRoles = ['partner', 'admin'];
     }
 
+    const nameParts = email.split('@')[0].replace(/[._-]/g, ' ').split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1));
+    const firstName = nameParts[0] || 'Test';
+    const lastName = nameParts[1] || 'User';
+    
     const user: User = {
       id: `user-${email.split('@')[0]}`,
       email,
-      name: email.split('@')[0].replace(/[._-]/g, ' ').split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' '),
-      roles: userRoles,
-      permissions: this.getRolePermissions(userRoles),
+      firstName,
+      lastName,
+      displayName: `${firstName} ${lastName}`,
       initiativeId: initiativeData.id,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      roles: userRoles.map(r => ({
+        id: `role-${r}`,
+        name: r as any,
+        permissions: this.getRolePermissions([r]).map(p => ({
+          id: `perm-${p}`,
+          resource: p.split('.')[0],
+          action: p.split('.')[1],
+          scope: 'initiative' as const
+        }))
+      })),
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
     return { user, initiative: initiativeData };

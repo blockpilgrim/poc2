@@ -73,7 +73,7 @@ export const msalConfig: Configuration = {
 
 // Redirect URIs for authentication flows
 export const authConfig = {
-  redirectUri: `${config.FRONTEND_URL}/auth/callback`,
+  redirectUri: config.AZURE_REDIRECT_URI || `${config.FRONTEND_URL}/auth/callback`,
   postLogoutRedirectUri: `${config.FRONTEND_URL}/`,
   
   // Scopes for Microsoft Graph API (to fetch user profile)

@@ -17,6 +17,7 @@ const envSchema = z.object({
   AZURE_TENANT_ID: z.string().optional(),
   AZURE_CLIENT_ID: z.string().optional(),
   AZURE_CLIENT_SECRET: z.string().optional(),
+  AZURE_REDIRECT_URI: z.string().optional(),
   
   // D365
   D365_URL: z.string().optional(),

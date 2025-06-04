@@ -82,12 +82,11 @@ export class AuthService {
    */
   async acquireTokenByRefreshToken(
     refreshToken: string,
-    account: AccountInfo
-  ): Promise<AuthenticationResult> {
+    _account?: AccountInfo
+  ): Promise<AuthenticationResult | null> {
     const refreshTokenRequest: RefreshTokenRequest = {
       refreshToken,
       scopes: authConfig.graphScopes,
-      account,
     };
 
     try {
@@ -183,7 +182,7 @@ export class AuthService {
    */
   async validateUserInitiative(
     account: AccountInfo,
-    d365Token: string
+    _d365Token: string
   ): Promise<Initiative | null> {
     // TODO: Implement D365 query to fetch user's Contact record
     // and extract the initiative field
@@ -199,16 +198,17 @@ export class AuthService {
     return {
       id: 'ec-arkansas',
       name: 'EC Arkansas',
-      code: 'EC_AR',
+      stateCode: 'AR',
+      displayName: 'Arkansas Partner Portal',
       theme: {
         primaryColor: '#DA291C',
         secondaryColor: '#FFFFFF',
-        logoUrl: '/logos/arkansas.svg',
-        faviconUrl: '/favicons/arkansas.ico'
+        logo: '/logos/arkansas.svg',
+        favicon: '/favicons/arkansas.ico'
       },
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
   }
 

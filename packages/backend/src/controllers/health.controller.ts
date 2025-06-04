@@ -30,7 +30,7 @@ class HealthController {
   /**
    * Basic health check
    */
-  check(req: Request, res: Response): void {
+  check(_req: Request, res: Response): void {
     const health: HealthStatus = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -45,7 +45,7 @@ class HealthController {
   /**
    * Detailed health check including system info and service status
    */
-  async detailed(req: Request, res: Response): Promise<void> {
+  async detailed(_req: Request, res: Response): Promise<void> {
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMem = totalMem - freeMem;

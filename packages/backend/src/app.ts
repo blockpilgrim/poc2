@@ -36,7 +36,7 @@ app.use(requestLogger);
 app.use('/api', apiRoutes);
 
 // Root endpoint
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
   res.json({
     message: 'Partner Portal v2.0 API',
     version: '1.0.0',

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import type { JWTPayload, User, Initiative } from '@partner-portal/shared';
+import type { User, Initiative } from '@partner-portal/shared';
+import { ExtendedJWTPayload } from '../types/auth';
 import { AccountInfo } from '@azure/msal-node';
 
 /**
@@ -9,12 +10,10 @@ import { AccountInfo } from '@azure/msal-node';
  */
 export class JWTService {
   private readonly secret: string;
-  private readonly accessTokenExpiry: string;
   private readonly refreshTokenExpiry: string;
 
   constructor() {
     this.secret = config.JWT_SECRET;
-    this.accessTokenExpiry = config.JWT_EXPIRES_IN;
     this.refreshTokenExpiry = config.JWT_REFRESH_EXPIRES_IN;
   }
 
@@ -31,23 +30,24 @@ export class JWTService {
       throw new Error('Cannot generate token without initiative - security boundary violation');
     }
 
-    const payload: JWTPayload = {
+    const now = Math.floor(Date.now() / 1000);
+    const payload: ExtendedJWTPayload = {
       sub: user.id,
       email: user.email,
-      name: user.name,
-      roles: user.roles,
-      permissions: user.permissions,
+      name: user.displayName,
+      roles: user.roles.map(r => r.name),
+      permissions: user.roles.flatMap(r => r.permissions.map(p => `${p.resource}.${p.action}`)),
       initiative: initiative.id,
       initiativeName: initiative.name,
-      initiativeCode: initiative.code,
+      initiativeCode: initiative.stateCode,
       azureId: azureAccount.homeAccountId,
-      iat: Math.floor(Date.now() / 1000),
+      iat: now,
+      exp: now + 900, // 15 minutes
       iss: 'partner-portal-api',
       aud: 'partner-portal-frontend',
     };
 
     return jwt.sign(payload, this.secret, {
-      expiresIn: this.accessTokenExpiry,
       algorithm: 'HS256',
     });
   }
@@ -72,13 +72,13 @@ export class JWTService {
   /**
    * Verify and decode access token
    */
-  verifyAccessToken(token: string): JWTPayload {
+  verifyAccessToken(token: string): ExtendedJWTPayload {
     try {
       const decoded = jwt.verify(token, this.secret, {
         algorithms: ['HS256'],
         issuer: 'partner-portal-api',
         audience: 'partner-portal-frontend',
-      }) as JWTPayload;
+      }) as ExtendedJWTPayload;
 
       // CRITICAL: Ensure initiative is present
       if (!decoded.initiative) {
@@ -130,9 +130,9 @@ export class JWTService {
   /**
    * Decode token without verification (for debugging)
    */
-  decodeToken(token: string): JWTPayload | null {
+  decodeToken(token: string): ExtendedJWTPayload | null {
     try {
-      return jwt.decode(token) as JWTPayload;
+      return jwt.decode(token) as ExtendedJWTPayload;
     } catch {
       return null;
     }
