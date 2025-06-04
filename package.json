@@ -1,0 +1,33 @@
+{
+  "name": "partner-portal-v2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Partner Portal v2.0 - Multi-state initiative platform",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:backend & npm run dev:frontend",
+    "dev:frontend": "npm run dev --workspace=@partner-portal/frontend",
+    "dev:backend": "npm run dev --workspace=@partner-portal/backend",
+    "build": "npm run build:shared && npm run build:backend && npm run build:frontend",
+    "build:frontend": "npm run build --workspace=@partner-portal/frontend",
+    "build:backend": "npm run build --workspace=@partner-portal/backend",
+    "build:shared": "npm run build --workspace=@partner-portal/shared",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules",
+    "install:all": "npm install",
+    "docker:up": "docker-compose up",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.6",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}
