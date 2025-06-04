@@ -1,0 +1,20 @@
+{
+  "name": "@partner-portal/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared types and utilities for Partner Portal v2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist node_modules",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "peerDependencies": {
+    "zod": "^3.24.1"
+  }
+}
