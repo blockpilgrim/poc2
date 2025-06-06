@@ -75,17 +75,24 @@ This initiative will confirm the chosen technology stack's suitability to replac
 ## Multi-State Initiative Architecture
 
 ### Initiative Context
-Each U.S. state expansion is managed through D365 "initiatives":
-- D365 Contact records are tagged with initiatives (e.g., "EC Arkansas", "EC Kentucky")
-- Portal users see initiative-specific theming based on their D365 Contact
+Each U.S. state expansion is managed through security groups in Microsoft Entra ID:
+- Users are assigned to Entra ID security groups (e.g., "EC Arkansas", "EC Oregon")
+- Portal users see initiative-specific theming based on their Entra ID group membership
 - **Critical**: Users can ONLY access data tagged with their initiative
 
 ### Security Model
-The initiative field serves as a **hard security boundary**:
-1. JWT tokens include initiative claims from D365 Contact
-2. All API endpoints enforce initiative-based filtering
+Microsoft Entra ID groups serve as the **hard security boundary**:
+1. JWT tokens include initiative claims from Entra ID group membership
+2. All API endpoints enforce initiative-based filtering using group claims
 3. Frontend queries include initiative in all data requests
 4. Cross-initiative access attempts trigger security alerts
+
+### Role-Based Access Control
+Microsoft Entra ID App Roles define user permissions:
+- **Admin**: Full access to all features within their initiative
+- **Partner**: Standard access to lead management and organizational data
+- **Volunteer**: Limited access based on volunteer organization needs
+- Roles are assigned in Entra ID and included in JWT claims
 
 ## Reusable Components from Next.js Implementation
 
@@ -116,16 +123,16 @@ The initiative field serves as a **hard security boundary**:
 1. **D365 Client** (`lib/clients/d365Client.ts`)
    - Move to Express backend
    - Adapt token management for server environment
-   - Add initiative extraction from Contact records
+   - Fetch organization data from D365
 
 2. **D365 Services** (`lib/services/d365ContactService.ts`)
    - Move to Express backend
    - Expose via RESTful endpoints
-   - Ensure initiative is always included in responses
+   - Fetch organizational data (Account) and lead management data
 
 3. **Authentication Logic** (`lib/auth.ts`)
    - Replace Auth.js with MSAL Node
-   - Implement JWT-based API authentication with initiative claims
+   - Implement JWT-based API authentication with Entra ID groups and roles
 
 4. **API Routes** (`app/api/*`)
    - Convert to Express routes
@@ -153,30 +160,32 @@ The initiative field serves as a **hard security boundary**:
 
 #### Core Authentication Flow
 - [x] Configure MSAL Node for Azure AD authentication
-- [x] Implement token validation middleware
+- [x] Implement token validation middleware (needs update for groups/roles)
 - [x] Create authentication endpoints (/auth/login, /auth/callback, /auth/logout)
-- [x] Implement JWT generation for API access
-- [x] **CRITICAL**: Include initiative in JWT claims
-- [x] **CRITICAL**: Test complete end-to-end authentication flow
-- [x] Document real vs simulated data boundaries
+- [x] Implement JWT generation for API access (needs refactor for groups/roles)
+- [ ] **CRITICAL**: Include Entra ID groups in JWT claims
+- [ ] **CRITICAL**: Include Entra ID app roles in JWT claims
+- [ ] **CRITICAL**: Test complete end-to-end authentication flow with Entra ID groups/roles
+- [ ] Document Entra ID groups/roles configuration requirements
 - [ ] Implement authentication context/provider (Frontend)
 - [ ] Create login/logout flows with MSAL redirect (Frontend)
-- [x] Implement token management and refresh
+- [x] Implement token management and refresh (needs update for new claims)
 
 #### Basic Initiative Support
 - [ ] Define Initiative type and theme contracts
-- [ ] **CRITICAL**: Extract initiative from Contact records
-- [ ] **CRITICAL**: Implement initiative filter middleware
-- [ ] Create initiative validation middleware
-- [ ] Include initiative in all query keys
-- [ ] Store initiative and theme in auth state
+- [ ] **CRITICAL**: Extract initiative from Entra ID group membership
+- [ ] **CRITICAL**: Extract roles from Entra ID app role assignments
+- [ ] **CRITICAL**: Implement initiative filter middleware based on groups
+- [ ] Refactor existing initiative validation to use Entra ID groups
+- [ ] Update query keys to use group-based initiatives
+- [ ] Store Entra ID groups and derived initiative in auth state
 
 #### Minimal D365 Integration
 - [x] Create D365 service architecture with stub implementation
 - [x] Document production transition plan for real D365 integration
-- [x] Map D365 field requirements (msevtmgt_aadobjectid, tc_initiative, crda6_portalroles)
+- [ ] Map D365 field requirements for organization data (Account relationships)
 - [ ] Implement actual D365 Web API queries
-- [ ] Create /api/profile endpoint for user data
+- [ ] Create /api/profile endpoint combining Entra ID identity with D365 org data
 
 #### Basic UI Foundation
 - [ ] Configure Tailwind CSS (latest stable) and migrate design tokens
@@ -190,17 +199,17 @@ The initiative field serves as a **hard security boundary**:
 - [ ] Complete refresh token handling implementation (partial implementation exists)
 - [ ] **Security**: Implement secure session management
 - [ ] **Security**: Upgrade JWT signing from HS256 to RS256 for production
-- [ ] Validate initiative access during authentication
+- [ ] Validate Entra ID group membership during authentication
 - [ ] Build comprehensive E2E tests for auth flows
-- [ ] Implement role-based access control middleware
-- [ ] Add state assignment parsing
-- [ ] **Security**: Audit D365 permissions for least privilege
-- [ ] Create initiative-based theme resolver
+- [ ] Implement role-based access control middleware using Entra ID app roles
+- [ ] Parse and validate Entra ID groups for initiative assignment
+- [ ] **Security**: Configure Entra ID app registration permissions
+- [ ] Create initiative-based theme resolver using group membership
 - [ ] Add route protection with React Router guards
-- [ ] Create user profile state management
-- [ ] Display role-based UI elements
+- [ ] Create user profile state management combining Entra ID and D365 data
+- [ ] Display role-based UI elements based on Entra ID app roles
 - [ ] **Security**: Secure token storage strategy
-- [ ] Apply initiative-based theme on login
+- [ ] Apply initiative-based theme on login based on group membership
 
 #### State Management Implementation
 - [ ] Implement structured Zustand store architecture
@@ -418,8 +427,8 @@ poc-portal-2/
 - Official Microsoft library with guaranteed Azure AD compatibility
 - Better suited for API-based authentication flows
 - More control over token handling and validation
-- Direct support for advanced Azure AD features
-- Easier to embed initiative claims in tokens
+- Direct support for advanced Azure AD features including groups and app roles
+- Native support for extracting Entra ID claims from tokens
 
 #### API Design Principles
 - RESTful design with consistent naming
@@ -448,8 +457,9 @@ poc-portal-2/
 interface JWTPayload {
   sub: string;
   email: string;
-  initiative: string; // "EC Arkansas", "EC Kentucky", etc.
-  permissions: string[];
+  groups: string[]; // Entra ID security groups (e.g., ["EC Arkansas", "EC Oregon"])
+  roles: string[]; // Entra ID app roles (e.g., ["Partner", "Admin"])
+  initiative: string; // Primary initiative derived from groups
   exp: number;
 }
 
@@ -464,7 +474,15 @@ const queryKeys = {
 
 // Backend Middleware
 const enforceInitiative = async (req, res, next) => {
-  const userInitiative = req.user.initiative;
+  // Extract primary initiative from groups
+  const userGroups = req.user.groups || [];
+  const initiativeGroup = userGroups.find(g => g.startsWith('EC '));
+
+  if (!initiativeGroup) {
+    return res.status(403).json({ error: 'No initiative access' });
+  }
+
+  const userInitiative = initiativeGroup;
 
   // Inject into all D365 queries
   req.d365Filter = {
@@ -476,6 +494,8 @@ const enforceInitiative = async (req, res, next) => {
   logger.info('Data access', {
     userId: req.user.sub,
     initiative: userInitiative,
+    groups: userGroups,
+    roles: req.user.roles,
     endpoint: req.path
   });
 
@@ -485,18 +505,18 @@ const enforceInitiative = async (req, res, next) => {
 // Theme Configuration
 const initiativeThemes: Record<string, ThemeConfig> = {
   'EC Arkansas': {
-    primaryColor: '#DA291C',
-    secondaryColor: '#FFFFFF',
+    primaryColor: '#00B274',
+    secondaryColor: '#313E48',
     logo: '/logos/arkansas.svg',
     favicon: '/favicons/arkansas.ico',
     name: 'Arkansas Partner Portal',
   },
-  'EC Kentucky': {
-    primaryColor: '#003F87',
-    secondaryColor: '#FFD700',
-    logo: '/logos/kentucky.svg',
-    favicon: '/favicons/kentucky.ico',
-    name: 'Kentucky Partner Portal',
+  'EC Tennessee': {
+    primaryColor: '#F38359',
+    secondaryColor: '#313E48',
+    logo: '/logos/tennessee.svg',
+    favicon: '/favicons/tennessee.ico',
+    name: 'Tennessee Partner Portal',
   },
 };
 ```
@@ -624,10 +644,10 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
    - Configured OAuth redirect URIs and scopes
 
 2. **JWT Token Generation** (auth-4 + auth-5) ✓
-   - JWT service with **mandatory initiative claims**
+   - JWT service with **mandatory initiative claims from D365 Contact**
    - Access tokens (15min) and refresh tokens (7d)
    - Initiative validation enforced - tokens cannot be generated without initiative
-   - Extended JWT payload with initiative details
+   - Extended JWT payload with initiative details from D365
    - HS256 algorithm (Note: Consider RS256 for production)
 
 3. **Token Validation Middleware** (auth-2) ✓
@@ -643,7 +663,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
    - `/api/auth/callback` - Handles OAuth callback, fetches user from D365
    - `/api/auth/logout` - Clears sessions and redirects to Azure AD logout
    - `/api/auth/refresh` - Refresh token endpoint (partial implementation)
-   - `/api/auth/me` - Returns current user with initiative
+   - `/api/auth/me` - Returns current user with initiative from D365
    - `/api/auth/config` - Provides auth config for frontend
 
 5. **Supporting Services Created:**
@@ -657,46 +677,66 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 6. **End-to-End Authentication Testing** ✅
    - Successfully tested complete Azure AD OAuth flow
-   - Verified JWT token generation with initiative claims
-   - Validated token structure contains: user data, roles, permissions, initiative
+   - Verified JWT token generation with D365-based initiative claims
+   - Validated token structure contains: user data, roles from D365, permissions, initiative
    - Confirmed security boundary enforcement at token level
    - Documented real vs simulated data boundaries
 
-### 📍 D365 Field Mapping Confirmed:
-Based on user requirements, the following D365 Contact fields will be used:
+### 📍 D365 Field Mapping (Current Implementation):
+Based on current implementation, the following D365 Contact fields are used:
 - `msevtmgt_aadobjectid` - Azure AD Object ID for Contact lookup
 - `tc_initiative` - User's initiative (security boundary)
 - `crda6_portalroles` - User's portal role(s) (Admin, Partner, User)
 
-### 🚀 Authentication System Ready for Production
+### 📍 Updated Identity & Data Strategy (Target Architecture):
+**Microsoft Entra ID** (Identity & RBAC):
+- Security Groups for initiative assignment (e.g., "EC Arkansas", "EC Oregon")
+- App Roles for permissions (Admin, Partner, Volunteer)
+- User authentication and identity management
 
-**Current State:** 
+**Dynamics 365** (Business Data):
+- Organization (Account) relationships
+- Organization attributes (e.g., `tc_organizationleadtype`)
+- Lead management data
+- Other business-specific data
+
+### 🚀 Authentication System Ready for Refactoring
+
+**Current State:**
 - ✅ **Real Azure AD Integration**: Complete OAuth flow with PKCE security
-- ✅ **JWT Security Model**: Initiative-based claims enforced at token generation
+- ✅ **JWT Security Model**: D365-based initiative claims enforced at token generation
 - ✅ **Production Architecture**: MSAL Node with custom network client
 - 🧪 **Development Mode**: D365 service uses stub data with clear production transition plan
 
 **Data Boundaries:**
 - **Real Data**: Azure AD user identity, email, OAuth tokens, JWT structure
-- **Simulated Data**: Initiative assignments, roles, permissions (documented with production implementation plan)
+- **Simulated Data**: D365 Contact data (initiative, roles, permissions) with documented production implementation plan
 
-### 🔄 Next Steps - Basic Initiative Support:
+### 🔄 Next Steps - Entra ID Groups & Roles Integration:
 
-**1. Define Initiative Type and Theme Contracts**
-- Review and refine Initiative interface in shared package
-- Define theme configuration structure
-- Create initiative validation schemas
+**1. Update Authentication Flow for Groups/Roles**
+- Configure MSAL to request groups and roles claims in tokens
+- Update `/api/auth/callback` to extract groups/roles from ID token
+- Parse Entra ID groups to determine user's initiative
+- Extract app roles for permission-based access control
 
-**2. D365 Integration Updates**
-- Update D365 service to query by `msevtmgt_aadobjectid`
-- Map `tc_initiative` and `crda6_portalroles` fields
-- Handle multiple roles if field is multi-select
-- Implement actual D365 API calls
+**2. Refactor JWT Token Generation**
+- Include groups array in JWT payload
+- Include roles array in JWT payload
+- Derive primary initiative from group membership
+- Update JWT service to handle new claims structure
 
-**3. Initiative Security Implementation**
-- Implement initiative filter middleware
-- Create initiative validation middleware
-- Ensure all data queries include initiative filtering
+**3. Update Middleware for Group-Based Security**
+- Refactor `requireInitiatives` middleware to use groups
+- Update `requireRoles` middleware to use Entra ID app roles
+- Implement initiative extraction from groups (e.g., "EC Arkansas")
+- Create group-to-initiative mapping logic
+
+**4. D365 Integration for Organization Data**
+- Query D365 for user's Account (organization) relationship
+- Fetch organization attributes (e.g., `tc_organizationleadtype`)
+- Combine Entra ID identity with D365 business data
+- Create unified user profile response
 
 ### Implementation Notes:
 - Initiative security boundary is enforced at token generation
