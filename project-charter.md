@@ -6,7 +6,7 @@ This document serves as a comprehensive guide for developing the Partner Portal 
 
 This strategic shift is driven by the critical need to overcome the scalability limitations, maintenance overhead, and branding inflexibility inherent in the previous multi-instance approach. Partner Portal v2.0 aims to deliver a unified, scalable, and maintainable solution that efficiently supports our expanding operations across multiple U.S. states, each represented as an "Initiative."
 
-A core tenet of this project is to **preserve and potentially enhance the existing lead management capabilities** currently valued by our external partner organizations. This includes secure access to assigned leads, comprehensive dashboard views with filtering and search, detailed lead information management, and role-based access control tailored to their organizational context (e.g., Foster/Volunteer).
+A core tenet of this project is to **preserve and potentially enhance the existing lead management capabilities** currently valued by our external partner organizations. This includes secure access to assigned leads, comprehensive dashboard views with filtering and search, detailed lead information management, and role-based access control tailored to their organizational context (e.g., differentiating access for Foster and Volunteer journeys, and scoping visibility to specific organizations or network-wide).
 
 The new architecture, detailed herein, emphasizes clear separation of concerns, API-first design, robust security through initiative-based data segregation, and dynamic theming. This will provide a modern, reliable, and intuitive interface for our partners, significantly reducing operational burdens and accelerating the delivery of future improvements.
 
@@ -88,11 +88,15 @@ Microsoft Entra ID groups serve as the **hard security boundary**:
 4. Cross-initiative access attempts trigger security alerts
 
 ### Role-Based Access Control
-Microsoft Entra ID App Roles define user permissions:
-- **Admin**: Full access to all features within their initiative
-- **Partner**: Standard access to lead management and organizational data
-- **Volunteer**: Limited access based on volunteer organization needs
-- Roles are assigned in Entra ID and included in JWT claims
+Microsoft Entra ID App Roles will define user permissions. The roles are designed to provide granular access based on user responsibilities and organizational structure:
+
+-   **Admin**: Retains full access to all features and administrative functions within their assigned initiative.
+-   **Foster Partner**: Granted access to all portal features specifically related to foster journeys, but this access is restricted to foster journeys associated with the user's own organization.
+-   **Volunteer Partner**: Granted access to all portal features specifically related to volunteer journeys, with access limited to volunteer journeys associated with the user's own organization.
+-   **Volunteer Network-Wide Partner**: Possesses comprehensive access to all portal features concerning volunteer journeys, with the ability to view and manage volunteer journeys across all participating organizations within the network.
+-   **Foster Network-Wide Partner**: Possesses comprehensive access to all portal features concerning foster journeys, with the ability to view and manage foster journeys across all participating organizations within the network.
+
+Roles will be assigned in Microsoft Entra ID and will be included as claims in the JWT, enabling the application to enforce permissions accordingly.
 
 ## Reusable Components from Next.js Implementation
 
@@ -458,7 +462,7 @@ interface JWTPayload {
   sub: string;
   email: string;
   groups: string[]; // Entra ID security groups (e.g., ["EC Arkansas", "EC Oregon"])
-  roles: string[]; // Entra ID app roles (e.g., ["Partner", "Admin"])
+  roles: string[]; // Entra ID app roles (e.g., ["Admin", "Foster Partner", "Volunteer Network-Wide Partner"])
   initiative: string; // Primary initiative derived from groups
   exp: number;
 }
@@ -679,12 +683,12 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 Based on current implementation, the following D365 Contact fields are used:
 - `msevtmgt_aadobjectid` - Azure AD Object ID for Contact lookup
 - `tc_initiative` - User's initiative (security boundary)
-- `crda6_portalroles` - User's portal role(s) (Admin, Partner, User)
+- `crda6_portalroles` - User's portal role(s) (Admin, Foster Partner, Volunteer Network-Wide Partner)
 
 ### 📍 Updated Identity & Data Strategy (Target Architecture):
 **Microsoft Entra ID** (Identity & RBAC):
 - Security Groups for initiative assignment (e.g., "EC Arkansas", "EC Oregon")
-- App Roles for permissions (Admin, Partner, Volunteer)
+- App Roles for permissions (Admin, Foster Partner, Volunteer Partner, Volunteer Network-Wide Partner, Foster Network-Wide Partner)
 - User authentication and identity management
 
 **Dynamics 365** (Business Data):
@@ -711,7 +715,7 @@ Based on current implementation, the following D365 Contact fields are used:
 
 **Core Changes:**
 - Initiative assignment via Entra ID security groups (e.g., "EC Arkansas")
-- Role assignment via Entra ID app roles (Admin, Partner, Volunteer)
+- Role assignment via Entra ID app roles (Admin, Foster Partner, Volunteer Partner, Volunteer Network-Wide Partner, Foster Network-Wide Partner)
 - D365 limited to organization/business data queries only
 - JWT tokens include both groups and roles arrays from Entra ID
 
@@ -720,7 +724,7 @@ Based on current implementation, the following D365 Contact fields are used:
 **Azure AD App Registration Requirements:**
 - [ ] Enable group claims in app manifest (`"groupMembershipClaims": "SecurityGroup"`)
 - [ ] Add Microsoft Graph API permission: `GroupMember.Read.All`
-- [ ] Define App Roles in manifest: `Admin`, `Partner`, `Volunteer`
+- [ ] Define App Roles in manifest: `Admin`, `Foster Partner`, `Volunteer Partner`, `Volunteer Network-Wide Partner`, `Foster Network-Wide Partner`
 - [ ] Configure optional claims for ID and access tokens
 - [ ] Assign users to security groups (e.g., "EC Arkansas", "EC Oregon")
 - [ ] Document group naming convention and role assignments
