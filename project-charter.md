@@ -675,13 +675,6 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
    - **Custom Types** (`types/auth.ts`) - Extended JWT payload types
    - Added dependencies: @azure/msal-node, jsonwebtoken
 
-6. **End-to-End Authentication Testing** ✅
-   - Successfully tested complete Azure AD OAuth flow
-   - Verified JWT token generation with D365-based initiative claims
-   - Validated token structure contains: user data, roles from D365, permissions, initiative
-   - Confirmed security boundary enforcement at token level
-   - Documented real vs simulated data boundaries
-
 ### 📍 D365 Field Mapping (Current Implementation):
 Based on current implementation, the following D365 Contact fields are used:
 - `msevtmgt_aadobjectid` - Azure AD Object ID for Contact lookup
@@ -714,29 +707,147 @@ Based on current implementation, the following D365 Contact fields are used:
 
 ### 🔄 Next Steps - Entra ID Groups & Roles Integration:
 
-**1. Update Authentication Flow for Groups/Roles**
-- Configure MSAL to request groups and roles claims in tokens
-- Update `/api/auth/callback` to extract groups/roles from ID token
-- Parse Entra ID groups to determine user's initiative
-- Extract app roles for permission-based access control
+**Strategic Pivot:** We are transitioning from using Dynamics 365 Contact fields to determine user initiatives and roles to leveraging Microsoft Entra ID's native security groups and app roles capabilities. This architectural change significantly simplifies our authentication flow, reduces dependency on D365 for identity management, and aligns with Microsoft's recommended patterns for multi-tenant SaaS applications.
 
-**2. Refactor JWT Token Generation**
-- Include groups array in JWT payload
-- Include roles array in JWT payload
-- Derive primary initiative from group membership
-- Update JWT service to handle new claims structure
+**Core Changes:**
+- Initiative assignment via Entra ID security groups (e.g., "EC Arkansas")
+- Role assignment via Entra ID app roles (Admin, Partner, Volunteer)
+- D365 limited to organization/business data queries only
+- JWT tokens include both groups and roles arrays from Entra ID
 
-**3. Update Middleware for Group-Based Security**
-- Refactor `requireInitiatives` middleware to use groups
-- Update `requireRoles` middleware to use Entra ID app roles
-- Implement initiative extraction from groups (e.g., "EC Arkansas")
-- Create group-to-initiative mapping logic
+#### 📋 Prerequisites & Configuration
 
-**4. D365 Integration for Organization Data**
-- Query D365 for user's Account (organization) relationship
-- Fetch organization attributes (e.g., `tc_organizationleadtype`)
-- Combine Entra ID identity with D365 business data
-- Create unified user profile response
+**Azure AD App Registration Requirements:**
+- [ ] Enable group claims in app manifest (`"groupMembershipClaims": "SecurityGroup"`)
+- [ ] Add Microsoft Graph API permission: `GroupMember.Read.All`
+- [ ] Define App Roles in manifest: `Admin`, `Partner`, `Volunteer`
+- [ ] Configure optional claims for ID and access tokens
+- [ ] Assign users to security groups (e.g., "EC Arkansas", "EC Oregon")
+- [ ] Document group naming convention and role assignments
+
+**Environment Configuration:**
+```env
+# Feature flags for gradual rollout
+ENTRA_GROUPS_ENABLED=true
+D365_ORG_DATA_ENABLED=true
+AZURE_GROUP_CLAIM_TYPE=securityGroup
+```
+
+#### 🏗️ Phase 1: Foundation Services
+
+**1.1 Create Initiative Mapping Service**
+```typescript
+// New file: packages/backend/src/services/initiative-mapping.service.ts
+- Map Entra ID group names to initiative IDs
+- Extract initiative from groups array (e.g., "EC Arkansas" → "ec-arkansas")
+- Provide theme configuration based on initiative
+- Handle edge cases (multiple groups, no groups, invalid groups)
+```
+
+**1.2 Update MSAL Configuration**
+- Add `GroupMember.Read.All` to graph scopes in `auth.config.ts`
+- Configure token claims to include groups and roles
+- Update auth URL parameters to request additional claims
+- Test token acquisition with new scopes
+
+**1.3 Create Types and Interfaces**
+- Extend JWT payload type to include `groups[]` and `appRoles[]`
+- Create `OrganizationData` interface for D365 data
+- Update shared types package with new auth structures
+
+#### 🔧 Phase 2: Core Authentication Refactor
+
+**2.1 Auth Service Updates** (`auth.service.ts`)
+```typescript
+// Add method to extract claims from ID token
+extractGroupsAndRoles(idToken: string): {
+  groups: string[],
+  roles: string[]
+}
+```
+
+**2.2 Auth Controller Callback Refactor** (`auth.controller.ts`)
+- Extract groups and roles from ID token after code exchange
+- Use initiative mapping service to derive initiative from groups
+- Create user object from Entra ID data (not D365)
+- Optionally fetch organization data from D365
+- Generate JWT with new claim structure
+- Handle missing initiative gracefully (clear error messages)
+
+**2.3 JWT Service Updates** (`jwt.service.ts`)
+- Update `generateAccessToken` to accept groups and roles arrays
+- Include both `groups` and `roles` in JWT payload
+- Maintain `initiative` field derived from groups
+- Add optional `organization` field for D365 data
+- Preserve backward compatibility with feature flag
+
+#### 🛡️ Phase 3: Security Middleware Updates
+
+**3.1 Update Auth Middleware** (`auth.middleware.ts`)
+- Modify `requireRoles` to use `appRoles` from Entra ID
+- Create new `enforceInitiativeFromGroups` middleware
+- Update logging to include groups for audit trail
+- Maintain backward compatibility during transition
+
+**3.2 Create Group-Based Security Utilities**
+- Helper functions for group validation
+- Initiative extraction from JWT claims
+- Role hierarchy validation
+- Cross-initiative access detection
+
+#### 🔄 Phase 4: D365 Service Refactoring
+
+**4.1 Refactor D365 Service** (`d365.service.ts`)
+- Remove `getUserWithInitiative` method
+- Create `getUserOrganization(email)` for org data only
+- Query Account relationship from Contact
+- Return organization attributes (type, name, etc.)
+- Handle D365 failures gracefully (org data is optional)
+
+**4.2 Update Data Flow**
+- Entra ID → Identity and RBAC
+- D365 → Organization and business data only
+- Combine at token generation for complete user context
+
+#### 🧪 Phase 5: Testing & Validation
+
+**5.1 Unit Tests**
+- Initiative extraction from various group combinations
+- JWT generation with new claims
+- Middleware with Entra ID claims
+- D365 service with org-only queries
+
+**5.2 Integration Tests**
+- Full auth flow with mock Entra ID responses
+- Initiative boundary enforcement
+- Role-based access control
+- Graceful handling of D365 failures
+
+**5.3 Manual Testing Scenarios**
+- [ ] User with single initiative group → correct initiative
+- [ ] User with multiple groups → primary initiative logic
+- [ ] User with no "EC" groups → access denied
+- [ ] Admin role from Entra → admin permissions
+- [ ] D365 offline → auth still succeeds
+
+
+#### 📊 Success Criteria
+
+- [ ] All users can authenticate with Entra ID groups
+- [ ] Initiative correctly derived from security groups
+- [ ] Roles properly extracted from app roles
+- [ ] D365 integration limited to org data only
+- [ ] No regression in auth performance
+- [ ] Security boundaries maintained
+- [ ] Comprehensive test coverage achieved
+
+#### ⚠️ Risk Mitigation
+
+**Common Issues & Solutions:**
+- Missing groups claim → Check app registration
+- Multiple initiatives → Define primary selection logic
+- D365 timeout → Make org data optional
+- Token size concerns → Optimize claim selection
 
 ### Implementation Notes:
 - Initiative security boundary is enforced at token generation
