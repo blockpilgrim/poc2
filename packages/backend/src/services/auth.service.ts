@@ -274,7 +274,7 @@ export class AuthService {
    * @param groupIds Array of group IDs from the token
    * @param accessToken Access token with Graph permissions
    */
-  async getGroupNamesFromIds(groupIds: string[], accessToken: string): Promise<Map<string, string>> {
+  async getGroupNamesFromIds(groupIds: string[], _accessToken: string): Promise<Map<string, string>> {
     const groupMap = new Map<string, string>();
     
     if (!groupIds || groupIds.length === 0) {

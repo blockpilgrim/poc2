@@ -52,7 +52,7 @@ export class JWTService {
     const payload: ExtendedJWTPayload = {
       sub: user.id,
       email: user.email,
-      name: isLegacyUser ? (user as User).displayName : user.name,
+      name: isLegacyUser ? (user as User).displayName : (user as any).name || '',
       groups: groups,
       roles: roles,
       appRoles: isLegacyUser ? (user as User).roles : undefined, // Legacy compatibility
@@ -89,7 +89,7 @@ export class JWTService {
     return jwt.sign(payload, this.secret, {
       expiresIn: this.refreshTokenExpiry,
       algorithm: 'HS256', // TODO: SECURITY - Migrate to RS256 with public/private key pairs for production
-    });
+    } as jwt.SignOptions);
   }
 
   /**

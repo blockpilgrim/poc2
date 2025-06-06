@@ -145,7 +145,7 @@ export class AuthController {
           throw new AppError('Failed to acquire D365 access token', 500);
         }
 
-        const { user, initiative: d365Initiative } = await d365Service.getUserWithInitiative(
+        const { initiative: d365Initiative } = await d365Service.getUserWithInitiative(
           authResult.account.username,
           d365Token
         );
