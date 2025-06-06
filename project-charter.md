@@ -709,7 +709,7 @@ Based on current implementation, the following D365 Contact fields are used:
 - **Real Data**: Azure AD user identity, email, OAuth tokens, JWT structure
 - **Simulated Data**: D365 Contact data (initiative, roles, permissions) with documented production implementation plan
 
-### 🔄 Next Steps - Entra ID Groups & Roles Integration:
+### Next Steps - Entra ID Groups & Roles Integration:
 
 **Strategic Pivot:** We are transitioning from using Dynamics 365 Contact fields to determine user initiatives and roles to leveraging Microsoft Entra ID's native security groups and app roles capabilities. This architectural change significantly simplifies our authentication flow, reduces dependency on D365 for identity management, and aligns with Microsoft's recommended patterns for multi-tenant SaaS applications.
 
@@ -739,86 +739,86 @@ AZURE_GROUP_CLAIM_TYPE=securityGroup
 
 #### ✅ Phase 1: Foundation Services (COMPLETED)
 
-**1.1 Create Initiative Mapping Service** ✓
-- Created `initiative-mapping.service.ts` with full implementation
-- Maps Entra ID group names to initiative IDs (e.g., "EC Arkansas" → "ec-arkansas")
-- Provides theme configuration for each initiative
-- Handles edge cases: multiple groups, no groups, invalid groups
-- Includes helper methods for validation and display names
+**1.1 Create Initiative Mapping Service**
+- [x] Created `initiative-mapping.service.ts` with full implementation
+- [x] Maps Entra ID group names to initiative IDs (e.g., "EC Arkansas" → "ec-arkansas")
+- [x] Provides theme configuration for each initiative
+- [x] Handles edge cases: multiple groups, no groups, invalid groups
+- [x] Includes helper methods for validation and display names
 
-**1.2 Update MSAL Configuration** ✓
-- Added `GroupMember.Read.All` to graph scopes in `auth.config.ts`
-- Added feature flags: `ENTRA_GROUPS_ENABLED`, `D365_ORG_DATA_ENABLED`, `AZURE_GROUP_CLAIM_TYPE`
-- Configuration ready for token claims with groups and roles
+**1.2 Update MSAL Configuration**
+- [x] Added `GroupMember.Read.All` to graph scopes in `auth.config.ts`
+- [x] Added feature flags: `ENTRA_GROUPS_ENABLED`, `D365_ORG_DATA_ENABLED`, `AZURE_GROUP_CLAIM_TYPE`
+- [x] Configuration ready for token claims with groups and roles
 
-**1.3 Create Types and Interfaces** ✓
-- Extended JWT payload type to include `groups[]` and `roles[]` arrays
-- Created `OrganizationData` interface in shared types
-- Added `AzureADIdTokenClaims` interface for ID token structure
-- Updated `ExtendedJWTPayload` to support new auth flow
+**1.3 Create Types and Interfaces**
+- [x] Extended JWT payload type to include `groups[]` and `roles[]` arrays
+- [x] Created `OrganizationData` interface in shared types
+- [x] Added `AzureADIdTokenClaims` interface for ID token structure
+- [x] Updated `ExtendedJWTPayload` to support new auth flow
 
 #### ✅ Phase 2: Core Authentication Refactor (COMPLETED)
 
-**2.1 Auth Service Updates** (`auth.service.ts`) ✓
-- Added `extractGroupsAndRoles()` method to parse ID token claims
-- Added `getGroupNamesFromIds()` placeholder for Microsoft Graph integration
-- Ready to extract groups and roles from Azure AD tokens
+**2.1 Auth Service Updates** (`auth.service.ts`)
+- [x] Added `extractGroupsAndRoles()` method to parse ID token claims
+- [x] Added `getGroupNamesFromIds()` placeholder for Microsoft Graph integration
+- [x] Ready to extract groups and roles from Azure AD tokens
 
-**2.2 Auth Controller Callback Refactor** (`auth.controller.ts`) ✓
-- Refactored callback to extract groups and roles from ID token
-- Integrated initiative mapping service for group-based initiative assignment
-- Added feature flag support for gradual rollout
-- Maintains backward compatibility with D365-based auth
-- Optionally fetches organization data from D365
+**2.2 Auth Controller Callback Refactor** (`auth.controller.ts`)
+- [x] Refactored callback to extract groups and roles from ID token
+- [x] Integrated initiative mapping service for group-based initiative assignment
+- [x] Added feature flag support for gradual rollout
+- [x] Maintains backward compatibility with D365-based auth
+- [x] Optionally fetches organization data from D365
 
-**2.3 JWT Service Updates** (`jwt.service.ts`) ✓
-- Updated `generateAccessToken()` to accept flexible parameters
-- Includes `groups` and `roles` arrays in JWT payload
-- Maintains `initiative` field derived from groups
-- Added optional `organization` field for D365 data
-- Preserves backward compatibility with legacy User model
+**2.3 JWT Service Updates** (`jwt.service.ts`)
+- [x] Updated `generateAccessToken()` to accept flexible parameters
+- [x] Includes `groups` and `roles` arrays in JWT payload
+- [x] Maintains `initiative` field derived from groups
+- [x] Added optional `organization` field for D365 data
+- [x] Preserves backward compatibility with legacy User model
 
-#### 🛡️ Phase 3: Security Middleware Updates
+#### Phase 3: Security Middleware Updates
 
 **3.1 Update Auth Middleware** (`auth.middleware.ts`)
-- Modify `requireRoles` to use `appRoles` from Entra ID
-- Create new `enforceInitiativeFromGroups` middleware
-- Update logging to include groups for audit trail
-- Maintain backward compatibility during transition
+- [ ] Modify `requireRoles` to use `appRoles` from Entra ID
+- [ ] Create new `enforceInitiativeFromGroups` middleware
+- [ ] Update logging to include groups for audit trail
+- [ ] Maintain backward compatibility during transition
 
 **3.2 Create Group-Based Security Utilities**
-- Helper functions for group validation
-- Initiative extraction from JWT claims
-- Role hierarchy validation
-- Cross-initiative access detection
+- [ ] Helper functions for group validation
+- [ ] Initiative extraction from JWT claims
+- [ ] Role hierarchy validation
+- [ ] Cross-initiative access detection
 
-#### 🔄 Phase 4: D365 Service Refactoring
+#### Phase 4: D365 Service Refactoring
 
 **4.1 Refactor D365 Service** (`d365.service.ts`)
-- Remove `getUserWithInitiative` method
-- Create `getUserOrganization(email)` for org data only
-- Query Account relationship from Contact
-- Return organization attributes (type, name, etc.)
-- Handle D365 failures gracefully (org data is optional)
+- [ ] Remove `getUserWithInitiative` method
+- [ ] Create `getUserOrganization(email)` for org data only
+- [ ] Query Account relationship from Contact
+- [ ] Return organization attributes (type, name, etc.)
+- [ ] Handle D365 failures gracefully (org data is optional)
 
 **4.2 Update Data Flow**
-- Entra ID → Identity and RBAC
-- D365 → Organization and business data only
-- Combine at token generation for complete user context
+- [ ] Entra ID → Identity and RBAC
+- [ ] D365 → Organization and business data only
+- [ ] Combine at token generation for complete user context
 
-#### 🧪 Phase 5: Testing & Validation
+#### Phase 5: Testing & Validation
 
 **5.1 Unit Tests**
-- Initiative extraction from various group combinations
-- JWT generation with new claims
-- Middleware with Entra ID claims
-- D365 service with org-only queries
+- [ ] Initiative extraction from various group combinations
+- [ ] JWT generation with new claims
+- [ ] Middleware with Entra ID claims
+- [ ] D365 service with org-only queries
 
 **5.2 Integration Tests**
-- Full auth flow with mock Entra ID responses
-- Initiative boundary enforcement
-- Role-based access control
-- Graceful handling of D365 failures
+- [ ] Full auth flow with mock Entra ID responses
+- [ ] Initiative boundary enforcement
+- [ ] Role-based access control
+- [ ] Graceful handling of D365 failures
 
 **5.3 Manual Testing Scenarios**
 - [ ] User with single initiative group → correct initiative
@@ -828,7 +828,7 @@ AZURE_GROUP_CLAIM_TYPE=securityGroup
 - [ ] D365 offline → auth still succeeds
 
 
-#### 📊 Success Criteria
+#### Success Criteria
 
 - [ ] All users can authenticate with Entra ID groups
 - [ ] Initiative correctly derived from security groups
@@ -838,7 +838,7 @@ AZURE_GROUP_CLAIM_TYPE=securityGroup
 - [ ] Security boundaries maintained
 - [ ] Comprehensive test coverage achieved
 
-#### ⚠️ Risk Mitigation
+#### Risk Mitigation
 
 **Common Issues & Solutions:**
 - Missing groups claim → Check app registration
