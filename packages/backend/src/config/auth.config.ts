@@ -107,8 +107,8 @@ export const authConfig = {
   redirectUri: config.AZURE_REDIRECT_URI || `http://localhost:${config.PORT}/api/auth/callback`,
   postLogoutRedirectUri: `${config.FRONTEND_URL}/`,
   
-  // Scopes for Microsoft Graph API (to fetch user profile)
-  graphScopes: ['user.read', 'profile', 'openid', 'email'],
+  // Scopes for Microsoft Graph API (to fetch user profile and group memberships)
+  graphScopes: ['user.read', 'profile', 'openid', 'email', 'GroupMember.Read.All'],
   
   // Scopes for D365 API access
   d365Scopes: config.D365_URL ? [`${config.D365_URL}/.default`] : [],

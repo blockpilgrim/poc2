@@ -25,12 +25,20 @@ const envSchema = z.object({
   D365_CLIENT_SECRET: z.string().optional(),
   
   // JWT
-  JWT_SECRET: z.string().default('development-secret-change-in-production'),
+  JWT_SECRET: z.string().min(32).default('development-secret-change-in-production').refine(
+    (val) => process.env.NODE_ENV !== 'production' || val !== 'development-secret-change-in-production',
+    'Production requires a secure JWT secret'
+  ),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  
+  // Feature flags
+  ENTRA_GROUPS_ENABLED: z.string().default('true').transform((val) => val === 'true'),
+  D365_ORG_DATA_ENABLED: z.string().default('true').transform((val) => val === 'true'),
+  AZURE_GROUP_CLAIM_TYPE: z.enum(['securityGroup', 'all']).default('securityGroup'),
 });
 
 // Parse and validate environment variables

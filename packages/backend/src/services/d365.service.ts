@@ -1,5 +1,5 @@
 // import { config } from '../config';  // Will be used when D365 integration is implemented
-import type { User, Initiative } from '@partner-portal/shared';
+import type { User, Initiative, OrganizationData } from '@partner-portal/shared';
 import { authService } from './auth.service';
 
 /**
@@ -181,6 +181,58 @@ export class D365Service {
    */
   async getAccessToken(): Promise<string | null> {
     return authService.getD365AccessToken();
+  }
+
+  /**
+   * Get user's organization data from D365
+   * @param email User's email address
+   * @param d365Token D365 access token
+   * @returns Organization data or undefined if not found
+   */
+  async getUserOrganization(
+    email: string,
+    d365Token: string
+  ): Promise<OrganizationData | undefined> {
+    console.log(`[D365] Fetching organization data for: ${email}`);
+    
+    // STUB IMPLEMENTATION
+    // In production, this would:
+    // 1. Query Contact by email
+    // 2. Get related Account (organization) via _parentcustomerid_value
+    // 3. Return organization attributes
+    
+    // For now, return undefined to indicate org data is optional
+    return undefined;
+    
+    /* PRODUCTION IMPLEMENTATION:
+    try {
+      const contactResponse = await this.queryContactByEmail(email, d365Token);
+      if (!contactResponse || !contactResponse.value || contactResponse.value.length === 0) {
+        return undefined;
+      }
+      
+      const contact = contactResponse.value[0];
+      const accountId = contact._parentcustomerid_value;
+      
+      if (!accountId) {
+        return undefined;
+      }
+      
+      const accountResponse = await this.queryAccount(accountId, d365Token);
+      return {
+        id: accountResponse.accountid,
+        name: accountResponse.name,
+        type: accountResponse.tc_organizationleadtype,
+        attributes: {
+          leadType: accountResponse.tc_organizationleadtype,
+          // Add other relevant attributes
+        }
+      };
+    } catch (error) {
+      console.error('[D365] Error fetching organization data:', error);
+      return undefined;
+    }
+    */
   }
 
   /**

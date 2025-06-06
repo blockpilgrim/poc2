@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import type { User, Initiative } from '@partner-portal/shared';
+import type { User, Initiative, OrganizationData } from '@partner-portal/shared';
 import { ExtendedJWTPayload } from '../types/auth';
 import { AccountInfo } from '@azure/msal-node';
 
@@ -20,27 +20,50 @@ export class JWTService {
   /**
    * Generate access token with user info and initiative
    * CRITICAL: Initiative must always be included in the payload
+   * Updated to support both legacy User model and new Entra ID-based auth
    */
-  generateAccessToken(
-    user: User,
-    initiative: Initiative,
-    azureAccount: AccountInfo
-  ): string {
-    if (!initiative || !initiative.id) {
+  generateAccessToken(params: {
+    user: User | {
+      id: string;
+      email: string;
+      name: string;
+      azureId?: string;
+    };
+    initiative: Initiative | string;
+    initiativeName?: string;
+    groups?: string[];
+    roles?: string[];
+    organization?: OrganizationData;
+    account: AccountInfo;
+  }): string {
+    const { user, initiative, initiativeName, groups = [], roles = [], organization, account } = params;
+    
+    const initiativeId = typeof initiative === 'string' ? initiative : initiative.id;
+    
+    if (!initiativeId) {
       throw new Error('Cannot generate token without initiative - security boundary violation');
     }
 
     const now = Math.floor(Date.now() / 1000);
+    
+    // Handle both legacy User model and new simple user object
+    const isLegacyUser = 'roles' in user && Array.isArray(user.roles);
+    
     const payload: ExtendedJWTPayload = {
       sub: user.id,
       email: user.email,
-      name: user.displayName,
-      roles: user.roles.map(r => r.name),
-      permissions: user.roles.flatMap(r => r.permissions.map(p => `${p.resource}.${p.action}`)),
-      initiative: initiative.id,
-      initiativeName: initiative.name,
-      initiativeCode: initiative.stateCode,
-      azureId: azureAccount.homeAccountId,
+      name: isLegacyUser ? (user as User).displayName : user.name,
+      groups: groups,
+      roles: roles,
+      appRoles: isLegacyUser ? (user as User).roles : undefined, // Legacy compatibility
+      permissions: isLegacyUser 
+        ? (user as User).roles.flatMap(r => r.permissions.map(p => `${p.resource}.${p.action}`))
+        : [], // Will be derived from roles in middleware
+      initiative: initiativeId,
+      initiativeName: initiativeName || (typeof initiative === 'object' ? initiative.name : undefined),
+      initiativeCode: typeof initiative === 'object' ? initiative.stateCode : undefined,
+      azureId: 'azureId' in user ? user.azureId : account.homeAccountId,
+      organization,
       iat: now,
       exp: now + 900, // 15 minutes
       iss: 'partner-portal-api',
@@ -103,14 +126,18 @@ export class JWTService {
     try {
       const decoded = jwt.verify(token, this.secret, {
         algorithms: ['HS256'],
-      }) as any;
+      }) as jwt.JwtPayload & { type?: string; sub?: string; initiative?: string };
+
+      if (!decoded || typeof decoded === 'string') {
+        throw new Error('Invalid token format');
+      }
 
       if (decoded.type !== 'refresh') {
         throw new Error('Invalid token type');
       }
 
-      if (!decoded.initiative) {
-        throw new Error('Invalid token: missing initiative claim');
+      if (!decoded.sub || !decoded.initiative) {
+        throw new Error('Invalid token: missing required claims');
       }
 
       return {

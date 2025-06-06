@@ -12,6 +12,8 @@ import {
 import { msalConfig, authConfig } from '../config/auth.config';
 import { config } from '../config';
 import type { Initiative } from '@partner-portal/shared';
+import type { AzureADIdTokenClaims } from '../types/auth';
+import jwt from 'jsonwebtoken';
 
 /**
  * Authentication Service using MSAL Node
@@ -217,6 +219,94 @@ export class AuthService {
    */
   extractAccountInfo(authResult: AuthenticationResult): AccountInfo | null {
     return authResult.account || null;
+  }
+
+  /**
+   * Extract groups and roles from ID token
+   * @param idToken The ID token from Azure AD
+   * @returns Object containing groups and roles arrays
+   */
+  extractGroupsAndRoles(idToken: string): {
+    groups: string[];
+    roles: string[];
+    claims: AzureADIdTokenClaims;
+  } {
+    try {
+      // Decode the ID token without verification (verification happens in MSAL)
+      const decodedToken = jwt.decode(idToken) as AzureADIdTokenClaims;
+      
+      if (!decodedToken) {
+        throw new Error('Failed to decode ID token');
+      }
+
+      // Extract groups - these will be GUIDs if there are many groups
+      // The actual group names need to be fetched from Microsoft Graph if needed
+      const groups = decodedToken.groups || [];
+      
+      // Extract app roles - these are the role values defined in the app manifest
+      const roles = decodedToken.roles || [];
+
+      console.log('Extracted from ID token:', {
+        sub: decodedToken.sub,
+        email: decodedToken.email || decodedToken.preferred_username,
+        groupCount: groups.length,
+        roleCount: roles.length
+      });
+
+      return {
+        groups,
+        roles,
+        claims: decodedToken
+      };
+    } catch (error) {
+      console.error('Error extracting groups and roles from ID token:', error);
+      return {
+        groups: [],
+        roles: [],
+        claims: {} as AzureADIdTokenClaims
+      };
+    }
+  }
+
+  /**
+   * Get group names from group IDs using Microsoft Graph
+   * Note: This requires GroupMember.Read.All permission
+   * @param groupIds Array of group IDs from the token
+   * @param accessToken Access token with Graph permissions
+   */
+  async getGroupNamesFromIds(groupIds: string[], accessToken: string): Promise<Map<string, string>> {
+    const groupMap = new Map<string, string>();
+    
+    if (!groupIds || groupIds.length === 0) {
+      return groupMap;
+    }
+
+    try {
+      // In a real implementation, this would call Microsoft Graph API
+      // For now, we'll use a placeholder that maps known group IDs
+      // TODO: Implement actual Graph API calls
+      console.log(`Would fetch names for ${groupIds.length} groups from Microsoft Graph`);
+      
+      // Placeholder mapping - replace with actual Graph API calls
+      // This is for development only
+      const knownGroups = new Map([
+        ['group-id-1', 'EC Arkansas'],
+        ['group-id-2', 'EC Oregon'],
+        ['group-id-3', 'EC Tennessee'],
+      ]);
+
+      groupIds.forEach(id => {
+        const name = knownGroups.get(id);
+        if (name) {
+          groupMap.set(id, name);
+        }
+      });
+
+      return groupMap;
+    } catch (error) {
+      console.error('Error fetching group names:', error);
+      return groupMap;
+    }
   }
 }
 

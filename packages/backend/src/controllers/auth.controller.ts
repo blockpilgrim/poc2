@@ -3,9 +3,11 @@ import { authService } from '../services/auth.service';
 import { sessionService } from '../services/session.service';
 import { jwtService } from '../services/jwt.service';
 import { d365Service } from '../services/d365.service';
+import { initiativeMappingService } from '../services/initiative-mapping.service';
 import { AppError } from '../utils/errors';
 import { config } from '../config';
 import type { ExtendedJWTPayload } from '../types/auth';
+import type { OrganizationData } from '@partner-portal/shared';
 
 /**
  * Authentication Controller
@@ -73,51 +75,106 @@ export class AuthController {
         session.pkceVerifier
       );
 
-      if (!authResult.account) {
+      if (!authResult.account || !authResult.idToken) {
         throw new AppError('No account information received', 401);
       }
 
-      // Get D365 access token (using client credentials or OBO)
-      const d365Token = await authService.getD365AccessToken();
-      if (!d365Token) {
-        throw new AppError('Failed to acquire D365 access token', 500);
-      }
+      // Extract groups and roles from ID token
+      const { groups, roles, claims } = authService.extractGroupsAndRoles(authResult.idToken);
 
-      // Fetch user and initiative from D365
-      const { user, initiative } = await d365Service.getUserWithInitiative(
-        authResult.account.username,
-        d365Token
-      );
+      // If feature flag is enabled, use Entra ID groups
+      let initiative: string;
+      let initiativeName: string | undefined;
+      let organization: OrganizationData | undefined;
 
-      if (!initiative || !initiative.id) {
-        throw new AppError(
-          'User does not have an assigned initiative. Access denied.',
-          403
+      if (config.ENTRA_GROUPS_ENABLED) {
+        // Map group IDs to names if needed (when groups are GUIDs)
+        let groupNames = groups;
+        if (groups.length > 0 && groups[0].match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // Groups are GUIDs, need to fetch names
+          const groupMap = await authService.getGroupNamesFromIds(groups, authResult.accessToken);
+          groupNames = groups.map(id => groupMap.get(id) || id);
+        }
+
+        // Extract initiative from Entra ID groups
+        try {
+          initiative = initiativeMappingService.extractInitiativeFromGroups(groupNames);
+          initiativeName = initiativeMappingService.getInitiativeDisplayName(initiative);
+        } catch (error) {
+          throw new AppError(
+            'User is not assigned to any initiative group. Please contact your administrator.',
+            403
+          );
+        }
+
+        // Optionally fetch organization data from D365
+        if (config.D365_ORG_DATA_ENABLED) {
+          try {
+            const d365Token = await authService.getD365AccessToken();
+            if (d365Token) {
+              organization = await d365Service.getUserOrganization(
+                authResult.account.username,
+                d365Token
+              );
+            }
+          } catch (error) {
+            console.warn('Failed to fetch organization data from D365:', error);
+            // Organization data is optional, continue without it
+          }
+        }
+      } else {
+        // Legacy: Fetch initiative from D365
+        const d365Token = await authService.getD365AccessToken();
+        if (!d365Token) {
+          throw new AppError('Failed to acquire D365 access token', 500);
+        }
+
+        const { user, initiative: d365Initiative } = await d365Service.getUserWithInitiative(
+          authResult.account.username,
+          d365Token
         );
+
+        if (!d365Initiative || !d365Initiative.id) {
+          throw new AppError(
+            'User does not have an assigned initiative. Access denied.',
+            403
+          );
+        }
+
+        initiative = d365Initiative.id;
+        initiativeName = d365Initiative.name;
       }
 
-      // Generate application JWT tokens
-      const accessToken = jwtService.generateAccessToken(
+      // Build user object from Entra ID claims
+      const user = {
+        id: claims.oid || claims.sub,
+        email: claims.email || claims.preferred_username || authResult.account.username,
+        name: claims.name || authResult.account.name || '',
+        azureId: claims.oid,
+      };
+
+      // Generate application JWT tokens with Entra ID data
+      const accessToken = jwtService.generateAccessToken({
         user,
         initiative,
-        authResult.account
-      );
+        initiativeName,
+        groups: config.ENTRA_GROUPS_ENABLED ? groups : [],
+        roles: config.ENTRA_GROUPS_ENABLED ? roles : [],
+        organization,
+        account: authResult.account,
+      });
+      
       const refreshToken = jwtService.generateRefreshToken(
         user.id,
-        initiative.id
+        initiative
       );
 
       // Prepare redirect URL with tokens
-      // REAL: JWT tokens with initiative security boundary enforced
-      // REAL: Redirect URL handling for frontend integration
       const frontendRedirect = new URL(
         session.redirectUrl || config.FRONTEND_URL
       );
       frontendRedirect.searchParams.set('token', accessToken);
       frontendRedirect.searchParams.set('refresh', refreshToken);
-
-      // Store refresh token in MSAL cache if needed
-      // This is handled automatically by MSAL
 
       res.redirect(frontendRedirect.toString());
     } catch (error) {

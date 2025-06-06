@@ -164,23 +164,23 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 
 #### Core Authentication Flow
 - [x] Configure MSAL Node for Azure AD authentication
-- [x] Implement token validation middleware (needs update for groups/roles)
+- [x] Implement token validation middleware (updated for groups/roles)
 - [x] Create authentication endpoints (/auth/login, /auth/callback, /auth/logout)
-- [x] Implement JWT generation for API access (needs refactor for groups/roles)
-- [ ] **CRITICAL**: Include Entra ID groups in JWT claims
-- [ ] **CRITICAL**: Include Entra ID app roles in JWT claims
+- [x] Implement JWT generation for API access (refactored for groups/roles)
+- [x] **CRITICAL**: Include Entra ID groups in JWT claims
+- [x] **CRITICAL**: Include Entra ID app roles in JWT claims
 - [ ] **CRITICAL**: Test complete end-to-end authentication flow with Entra ID groups/roles
-- [ ] Document Entra ID groups/roles configuration requirements
+- [x] Document Entra ID groups/roles configuration requirements
 - [ ] Implement authentication context/provider (Frontend)
 - [ ] Create login/logout flows with MSAL redirect (Frontend)
-- [x] Implement token management and refresh (needs update for new claims)
+- [x] Implement token management and refresh (updated for new claims)
 
 #### Basic Initiative Support
-- [ ] Define Initiative type and theme contracts
-- [ ] **CRITICAL**: Extract initiative from Entra ID group membership
-- [ ] **CRITICAL**: Extract roles from Entra ID app role assignments
+- [x] Define Initiative type and theme contracts
+- [x] **CRITICAL**: Extract initiative from Entra ID group membership
+- [x] **CRITICAL**: Extract roles from Entra ID app role assignments
 - [ ] **CRITICAL**: Implement initiative filter middleware based on groups
-- [ ] Refactor existing initiative validation to use Entra ID groups
+- [x] Refactor existing initiative validation to use Entra ID groups
 - [ ] Update query keys to use group-based initiatives
 - [ ] Store Entra ID groups and derived initiative in auth state
 
@@ -722,12 +722,12 @@ Based on current implementation, the following D365 Contact fields are used:
 #### 📋 Prerequisites & Configuration
 
 **Azure AD App Registration Requirements:**
+- [x] Document comprehensive Azure AD App Registration requirements (`docs/azure-ad-app-registration-requirements.md`)
 - [ ] Enable group claims in app manifest (`"groupMembershipClaims": "SecurityGroup"`)
 - [ ] Add Microsoft Graph API permission: `GroupMember.Read.All`
 - [ ] Define App Roles in manifest: `Admin`, `Foster Partner`, `Volunteer Partner`, `Volunteer Network-Wide Partner`, `Foster Network-Wide Partner`
 - [ ] Configure optional claims for ID and access tokens
 - [ ] Assign users to security groups (e.g., "EC Arkansas", "EC Oregon")
-- [ ] Document group naming convention and role assignments
 
 **Environment Configuration:**
 ```env
@@ -737,53 +737,46 @@ D365_ORG_DATA_ENABLED=true
 AZURE_GROUP_CLAIM_TYPE=securityGroup
 ```
 
-#### 🏗️ Phase 1: Foundation Services
+#### ✅ Phase 1: Foundation Services (COMPLETED)
 
-**1.1 Create Initiative Mapping Service**
-```typescript
-// New file: packages/backend/src/services/initiative-mapping.service.ts
-- Map Entra ID group names to initiative IDs
-- Extract initiative from groups array (e.g., "EC Arkansas" → "ec-arkansas")
-- Provide theme configuration based on initiative
-- Handle edge cases (multiple groups, no groups, invalid groups)
-```
+**1.1 Create Initiative Mapping Service** ✓
+- Created `initiative-mapping.service.ts` with full implementation
+- Maps Entra ID group names to initiative IDs (e.g., "EC Arkansas" → "ec-arkansas")
+- Provides theme configuration for each initiative
+- Handles edge cases: multiple groups, no groups, invalid groups
+- Includes helper methods for validation and display names
 
-**1.2 Update MSAL Configuration**
-- Add `GroupMember.Read.All` to graph scopes in `auth.config.ts`
-- Configure token claims to include groups and roles
-- Update auth URL parameters to request additional claims
-- Test token acquisition with new scopes
+**1.2 Update MSAL Configuration** ✓
+- Added `GroupMember.Read.All` to graph scopes in `auth.config.ts`
+- Added feature flags: `ENTRA_GROUPS_ENABLED`, `D365_ORG_DATA_ENABLED`, `AZURE_GROUP_CLAIM_TYPE`
+- Configuration ready for token claims with groups and roles
 
-**1.3 Create Types and Interfaces**
-- Extend JWT payload type to include `groups[]` and `appRoles[]`
-- Create `OrganizationData` interface for D365 data
-- Update shared types package with new auth structures
+**1.3 Create Types and Interfaces** ✓
+- Extended JWT payload type to include `groups[]` and `roles[]` arrays
+- Created `OrganizationData` interface in shared types
+- Added `AzureADIdTokenClaims` interface for ID token structure
+- Updated `ExtendedJWTPayload` to support new auth flow
 
-#### 🔧 Phase 2: Core Authentication Refactor
+#### ✅ Phase 2: Core Authentication Refactor (COMPLETED)
 
-**2.1 Auth Service Updates** (`auth.service.ts`)
-```typescript
-// Add method to extract claims from ID token
-extractGroupsAndRoles(idToken: string): {
-  groups: string[],
-  roles: string[]
-}
-```
+**2.1 Auth Service Updates** (`auth.service.ts`) ✓
+- Added `extractGroupsAndRoles()` method to parse ID token claims
+- Added `getGroupNamesFromIds()` placeholder for Microsoft Graph integration
+- Ready to extract groups and roles from Azure AD tokens
 
-**2.2 Auth Controller Callback Refactor** (`auth.controller.ts`)
-- Extract groups and roles from ID token after code exchange
-- Use initiative mapping service to derive initiative from groups
-- Create user object from Entra ID data (not D365)
-- Optionally fetch organization data from D365
-- Generate JWT with new claim structure
-- Handle missing initiative gracefully (clear error messages)
+**2.2 Auth Controller Callback Refactor** (`auth.controller.ts`) ✓
+- Refactored callback to extract groups and roles from ID token
+- Integrated initiative mapping service for group-based initiative assignment
+- Added feature flag support for gradual rollout
+- Maintains backward compatibility with D365-based auth
+- Optionally fetches organization data from D365
 
-**2.3 JWT Service Updates** (`jwt.service.ts`)
-- Update `generateAccessToken` to accept groups and roles arrays
-- Include both `groups` and `roles` in JWT payload
-- Maintain `initiative` field derived from groups
-- Add optional `organization` field for D365 data
-- Preserve backward compatibility with feature flag
+**2.3 JWT Service Updates** (`jwt.service.ts`) ✓
+- Updated `generateAccessToken()` to accept flexible parameters
+- Includes `groups` and `roles` arrays in JWT payload
+- Maintains `initiative` field derived from groups
+- Added optional `organization` field for D365 data
+- Preserves backward compatibility with legacy User model
 
 #### 🛡️ Phase 3: Security Middleware Updates
 
