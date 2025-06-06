@@ -1,41 +1,60 @@
-// import { config } from '../config';  // Will be used when D365 integration is implemented
+import { config } from '../config';
 import type { User, Initiative, OrganizationData } from '@partner-portal/shared';
 import { authService } from './auth.service';
 
 /**
- * D365 Service for fetching user and initiative data
+ * D365 Service for fetching organization and business data
  * 
  * CURRENT STATE: Stub implementation with simulated data
- * - Uses hardcoded initiative assignments and roles
- * - Returns test theme configurations
- * - Simulates user permissions based on email patterns
+ * - Organization data queries return undefined (optional data)
+ * - Ready for production D365 Web API integration
  * 
- * PRODUCTION TRANSITION STEPS:
+ * ARCHITECTURE UPDATE (Phase 4):
+ * - D365 is now used ONLY for organization/business data
+ * - Identity and RBAC come from Microsoft Entra ID
+ * - Initiative assignment via Entra ID security groups
+ * - Roles via Entra ID app roles
+ * 
+ * PRODUCTION IMPLEMENTATION:
  * 1. Configure D365 environment variables (D365_URL, D365_CLIENT_ID, D365_CLIENT_SECRET)
- * 2. Implement Contact lookup by msevtmgt_aadobjectid (Azure AD Object ID)
- * 3. Extract tc_initiative field from Contact record
- * 4. Parse crda6_portalroles field (may be multi-select)
- * 5. Query Initiative entity for theme configuration
- * 6. Map D365 roles to application permissions
- * 7. Replace stub data with actual D365 queries
+ * 2. Implement Contact lookup by email address
+ * 3. Query related Account (organization) via _parentcustomerid_value
+ * 4. Return organization attributes (type, name, etc.)
+ * 5. Handle failures gracefully - org data is optional
  */
 export class D365Service {
+  private readonly apiVersion = 'v9.2';
+  private readonly baseHeaders = {
+    'OData-MaxVersion': '4.0',
+    'OData-Version': '4.0',
+    'Accept': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
+    'Prefer': 'odata.include-annotations="*"'
+  };
+
   constructor() {
-    // D365 URL will be used when actual implementation is added
-    // config.D365_URL is available when needed
+    if (config.D365_URL) {
+      try {
+        // Don't log full URL for security - could contain sensitive info
+        const urlDomain = new URL(config.D365_URL).hostname;
+        console.log(`[D365] Service initialized with domain: ${urlDomain}`);
+      } catch (error) {
+        console.error('[D365] Invalid D365_URL provided:', error instanceof Error ? error.message : 'Unknown error');
+        // Continue in stub mode if URL is invalid
+      }
+    } else {
+      console.log('[D365] Service initialized in stub mode - no D365_URL configured');
+    }
   }
 
   /**
-   * Fetch user's Contact record from D365 and extract initiative
-   * CRITICAL: This is where we determine the user's security boundary
+   * @deprecated Use Microsoft Entra ID groups/roles for identity and RBAC
+   * This method is maintained for backward compatibility only.
+   * Will be removed once all deployments have migrated to Entra ID auth.
    * 
-   * REAL DATA: email parameter (from Azure AD authentication)
-   * SIMULATED DATA: initiative assignment, roles, permissions, theme config
-   * 
-   * PRODUCTION IMPLEMENTATION:
-   * const contact = await this.queryContactByAzureId(azureObjectId, d365Token);
-   * const initiative = await this.queryInitiative(contact.tc_initiative, d365Token);
-   * const roles = this.parsePortalRoles(contact.crda6_portalroles);
+   * Legacy method that fetched user's Contact record from D365 and extracted initiative.
+   * Initiative assignment now comes from Entra ID security groups.
+   * Roles now come from Entra ID app roles.
    */
   async getUserWithInitiative(email: string, _d365Token: string): Promise<{
     user: User;
@@ -185,92 +204,172 @@ export class D365Service {
 
   /**
    * Get user's organization data from D365
+   * This is the primary method for fetching business data from D365.
+   * Organization data is OPTIONAL - auth should not fail if this returns undefined.
+   * 
    * @param email User's email address
    * @param d365Token D365 access token
-   * @returns Organization data or undefined if not found
+   * @returns Organization data or undefined if not found/error
    */
   async getUserOrganization(
     email: string,
     d365Token: string
   ): Promise<OrganizationData | undefined> {
-    console.log(`[D365] Fetching organization data for: ${email}`);
-    
-    // STUB IMPLEMENTATION
-    // In production, this would:
-    // 1. Query Contact by email
-    // 2. Get related Account (organization) via _parentcustomerid_value
-    // 3. Return organization attributes
-    
-    // For now, return undefined to indicate org data is optional
-    return undefined;
-    
-    /* PRODUCTION IMPLEMENTATION:
     try {
-      const contactResponse = await this.queryContactByEmail(email, d365Token);
-      if (!contactResponse || !contactResponse.value || contactResponse.value.length === 0) {
+      // Validate inputs
+      if (!email || typeof email !== 'string') {
+        console.warn('[D365] Invalid email parameter provided');
         return undefined;
       }
       
-      const contact = contactResponse.value[0];
+      if (!d365Token || typeof d365Token !== 'string') {
+        console.warn('[D365] Invalid D365 token provided');
+        return undefined;
+      }
+      
+      console.log(`[D365] Fetching organization data for: ${email}`);
+      
+      // STUB MODE - Return undefined to simulate optional org data
+      if (!config.D365_URL) {
+        console.log('[D365] Running in stub mode - returning undefined for org data');
+        return undefined;
+      }
+      
+      // PRODUCTION IMPLEMENTATION
+      // Step 1: Query Contact by email address
+      const contact = await this.queryContactByEmail(email, d365Token);
+      if (!contact) {
+        console.log(`[D365] No contact found for email: ${email}`);
+        return undefined;
+      }
+      
+      // Step 2: Get related Account ID
       const accountId = contact._parentcustomerid_value;
-      
       if (!accountId) {
+        console.log(`[D365] Contact ${contact.contactid} has no parent account`);
         return undefined;
       }
       
-      const accountResponse = await this.queryAccount(accountId, d365Token);
+      // Step 3: Query Account for organization details
+      const account = await this.queryAccount(accountId, d365Token);
+      if (!account) {
+        console.log(`[D365] Account ${accountId} not found`);
+        return undefined;
+      }
+      
+      // Step 4: Return organization data
       return {
-        id: accountResponse.accountid,
-        name: accountResponse.name,
-        type: accountResponse.tc_organizationleadtype,
+        id: account.accountid,
+        name: account.name,
+        type: account.tc_organizationleadtype || 'Unknown',
         attributes: {
-          leadType: accountResponse.tc_organizationleadtype,
-          // Add other relevant attributes
+          leadType: account.tc_organizationleadtype,
+          // Add other relevant attributes as needed
+          createdOn: account.createdon,
+          modifiedOn: account.modifiedon,
         }
       };
     } catch (error) {
+      // Log error but don't throw - org data is optional
       console.error('[D365] Error fetching organization data:', error);
       return undefined;
     }
-    */
   }
 
   /**
-   * PRODUCTION READY METHODS - Implement these to replace stub data
+   * PRODUCTION D365 WEB API METHODS
    */
 
   /**
-   * Query Contact record by Azure AD Object ID
-   * FIELD MAPPING: msevtmgt_aadobjectid = Azure AD user.oid
+   * Query Contact by email address
+   * Used to find the user's Contact record and related organization
+   * 
+   * @param email User's email address
+   * @param d365Token D365 access token
+   * @returns Contact record or null if not found
    */
-  private async queryContactByAzureId(azureObjectId: string, d365Token: string): Promise<any> {
-    // TODO: Implement D365 Web API call
-    // GET /api/data/v9.1/contacts?$filter=msevtmgt_aadobjectid eq '${azureObjectId}'
-    // &$select=contactid,emailaddress1,firstname,lastname,tc_initiative,crda6_portalroles
-    throw new Error('Production method not implemented - currently using stub data');
+  private async queryContactByEmail(
+    email: string, 
+    d365Token: string
+  ): Promise<any | null> {
+    if (!config.D365_URL) {
+      // Stub mode - return null
+      return null;
+    }
+
+    try {
+      // Properly escape email for OData query - single quotes must be doubled
+      const escapedEmail = email.replace(/'/g, "''");
+      const url = `${config.D365_URL}/api/data/${this.apiVersion}/contacts`;
+      const query = `?$filter=emailaddress1 eq '${escapedEmail}'&$select=contactid,firstname,lastname,emailaddress1,_parentcustomerid_value&$top=1`;
+      
+      const response = await fetch(url + query, {
+        method: 'GET',
+        headers: {
+          ...this.baseHeaders,
+          'Authorization': `Bearer ${d365Token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[D365] Contact query failed: ${response.status} - ${errorText}`);
+        return null;
+      }
+
+      const data = await response.json() as { value: any[] };
+      return data.value && data.value.length > 0 ? data.value[0] : null;
+    } catch (error) {
+      console.error('[D365] Error querying contact:', error);
+      return null;
+    }
   }
 
   /**
-   * Query Initiative entity for theme configuration
-   * FIELD MAPPING: tc_initiative field references Initiative entity
+   * Query Account by ID
+   * Used to fetch organization details for a Contact
+   * 
+   * @param accountId D365 Account ID
+   * @param d365Token D365 access token
+   * @returns Account record or null if not found
    */
-  private async queryInitiative(initiativeId: string, d365Token: string): Promise<Initiative> {
-    // TODO: Implement D365 Web API call for Initiative entity
-    // GET /api/data/v9.1/tc_initiatives(${initiativeId})
-    // Map D365 fields to Initiative interface
-    throw new Error('Production method not implemented - currently using stub data');
+  private async queryAccount(
+    accountId: string,
+    d365Token: string
+  ): Promise<any | null> {
+    if (!config.D365_URL) {
+      // Stub mode - return null
+      return null;
+    }
+
+    try {
+      const url = `${config.D365_URL}/api/data/${this.apiVersion}/accounts(${accountId})`;
+      const query = `?$select=accountid,name,tc_organizationleadtype,createdon,modifiedon`;
+      
+      const response = await fetch(url + query, {
+        method: 'GET',
+        headers: {
+          ...this.baseHeaders,
+          'Authorization': `Bearer ${d365Token}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        const errorText = await response.text();
+        console.error(`[D365] Account query failed: ${response.status} - ${errorText}`);
+        return null;
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('[D365] Error querying account:', error);
+      return null;
+    }
   }
 
-  /**
-   * Parse portal roles from D365 multi-select picklist
-   * FIELD MAPPING: crda6_portalroles may contain multiple values
-   */
-  private parsePortalRoles(portalRolesValue: string | null): string[] {
-    // TODO: Parse D365 multi-select picklist format
-    // Handle comma-separated values or numeric option set values
-    if (!portalRolesValue) return ['partner']; // Default role
-    return portalRolesValue.split(',').map(r => r.trim().toLowerCase());
-  }
 }
 
 // Export singleton instance

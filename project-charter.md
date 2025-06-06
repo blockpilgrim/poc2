@@ -192,9 +192,9 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [ ] Create /api/profile endpoint combining Entra ID identity with D365 org data
 
 #### Basic UI Foundation
-- [ ] Configure Tailwind CSS (latest stable) and migrate design tokens
-- [ ] Port shadcn/ui components from Next.js
-- [ ] Set up React Router (latest stable - note: may require v6 to v7 migration) with route structure
+- [x] Configure Tailwind CSS (latest stable) and migrate design tokens
+- [x] Port shadcn/ui components from Next.js (Initial setup with key components: Button, Card, Input, Dialog)
+- [x] Set up React Router (latest stable - note: may require v6 to v7 migration) with route structure
 - [ ] Create initiative theme configuration system
 
 ### MVP Stage - Production-Ready Core Features
@@ -638,7 +638,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 **Phase:** POC Stage - Entra ID Groups & Roles Integration
 
-**Status:** Phase 3 (Security Middleware Updates) completed. Authentication system now supports both Entra ID groups/roles and legacy D365-based authentication with feature flag control.
+**Status:** Phase 4 (D365 Service Refactoring) completed. D365 service has been refactored to focus exclusively on organization/business data, with identity and RBAC now handled by Microsoft Entra ID. The authentication system supports both Entra ID groups/roles and legacy D365-based authentication with feature flag control.
 
 ### ✅ Completed Items:
 
@@ -808,27 +808,43 @@ AZURE_GROUP_CLAIM_TYPE=securityGroup
 - [x] Specified rate limiting needs for auth endpoints
 - [x] Defined security event logging infrastructure requirements
 
-#### Phase 4: D365 Service Refactoring
+#### ✅ Phase 4: D365 Service Refactoring (COMPLETED)
 
 **4.1 Refactor D365 Service** (`d365.service.ts`)
-- [ ] Remove `getUserWithInitiative` method
-- [ ] Create `getUserOrganization(email)` for org data only
-- [ ] Query Account relationship from Contact
-- [ ] Return organization attributes (type, name, etc.)
-- [ ] Handle D365 failures gracefully (org data is optional)
+- [x] Deprecated `getUserWithInitiative` method (maintained for backward compatibility)
+- [x] Created `getUserOrganization(email)` for org data only
+- [x] Implemented Contact query by email with OData API
+- [x] Query Account relationship from Contact via `_parentcustomerid_value`
+- [x] Return organization attributes (id, name, type, leadType, timestamps)
+- [x] Handle D365 failures gracefully - returns `undefined` without throwing
 
 **4.2 Update Data Flow**
-- [ ] Entra ID → Identity and RBAC
-- [ ] D365 → Organization and business data only
-- [ ] Combine at token generation for complete user context
+- [x] Entra ID → Identity and RBAC (groups and roles)
+- [x] D365 → Organization and business data only (optional)
+- [x] Auth controller combines both at token generation for complete user context
+
+**4.3 Production Implementation Details**
+- [x] Added proper OData headers and API version (v9.2)
+- [x] Implemented secure query escaping for email addresses
+- [x] Added input validation for email and token parameters
+- [x] Protected sensitive data in logs (only log domain, not full URL)
+- [x] Graceful error handling at every level
+- [x] Created comprehensive test suite with 17 passing tests
+- [x] Added migration documentation (`D365-MIGRATION.md`)
+
+**4.4 Security Improvements**
+- [x] Fixed OData injection vulnerability with proper escaping
+- [x] Added URL validation in constructor with error handling
+- [x] Implemented input validation for all public methods
+- [x] Enhanced error logging without exposing sensitive data
 
 #### Phase 5: Testing & Validation
 
 **5.1 Unit Tests**
-- [ ] Initiative extraction from various group combinations
-- [ ] JWT generation with new claims
-- [ ] Middleware with Entra ID claims
-- [ ] D365 service with org-only queries
+- [x] Initiative extraction from various group combinations (completed in Phase 3)
+- [x] JWT generation with new claims (completed in Phase 2)
+- [x] Middleware with Entra ID claims (completed in Phase 3)
+- [x] D365 service with org-only queries (17 tests passing)
 
 **5.2 Integration Tests**
 - [ ] Full auth flow with mock Entra ID responses

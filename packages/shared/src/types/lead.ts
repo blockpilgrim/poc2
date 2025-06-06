@@ -1,3 +1,5 @@
+import { FilterParams } from './api';
+
 /**
  * Lead management types
  */
