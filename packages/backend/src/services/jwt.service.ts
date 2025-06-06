@@ -71,7 +71,7 @@ export class JWTService {
     };
 
     return jwt.sign(payload, this.secret, {
-      algorithm: 'HS256',
+      algorithm: 'HS256', // TODO: SECURITY - Migrate to RS256 with public/private key pairs for production
     });
   }
 
@@ -88,7 +88,7 @@ export class JWTService {
 
     return jwt.sign(payload, this.secret, {
       expiresIn: this.refreshTokenExpiry,
-      algorithm: 'HS256',
+      algorithm: 'HS256', // TODO: SECURITY - Migrate to RS256 with public/private key pairs for production
     });
   }
 

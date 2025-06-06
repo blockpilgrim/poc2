@@ -116,10 +116,26 @@ export class AuthController {
                 authResult.account.username,
                 d365Token
               );
+              
+              // Log successful org data fetch
+              console.log('[AUTH] Organization data fetched:', {
+                userId: authResult.account.homeAccountId,
+                orgId: organization?.id,
+                orgName: organization?.name
+              });
             }
           } catch (error) {
-            console.warn('Failed to fetch organization data from D365:', error);
-            // Organization data is optional, continue without it
+            // Log the error with context for troubleshooting
+            console.warn('[AUTH] Failed to fetch organization data from D365:', {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              userId: authResult.account.homeAccountId,
+              email: authResult.account.username,
+              impact: 'Continuing without organization data'
+            });
+            
+            // TODO: Consider making organization data required for certain roles
+            // For now, organization data is optional to avoid blocking authentication
+            // In production, implement retry logic with exponential backoff
           }
         }
       } else {

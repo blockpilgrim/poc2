@@ -149,6 +149,11 @@ export class InitiativeMappingService {
   /**
    * Handle edge cases for multiple groups
    * Returns primary initiative based on priority or first match
+   * 
+   * Priority rules:
+   * 1. If user has only one initiative group, use it
+   * 2. If user has multiple groups, use alphabetical order for consistency
+   * 3. Log when multiple initiatives are found for audit purposes
    */
   resolvePrimaryInitiative(groups: string[]): {
     primary: string;
@@ -160,12 +165,25 @@ export class InitiativeMappingService {
       throw new AppError('No valid initiative groups found', 403);
     }
 
-    // For now, use the first initiative as primary
-    // In the future, this could be based on user preference or priority
-    const primary = userInitiatives[0].initiativeId;
-    const additional = userInitiatives
+    // Sort initiatives alphabetically for consistent behavior
+    const sortedInitiatives = userInitiatives.sort((a, b) => 
+      a.initiativeId.localeCompare(b.initiativeId)
+    );
+
+    const primary = sortedInitiatives[0].initiativeId;
+    const additional = sortedInitiatives
       .slice(1)
       .map(init => init.initiativeId);
+
+    // Log when user has multiple initiatives for security audit
+    if (additional.length > 0) {
+      console.warn('[INITIATIVE] User has multiple initiative groups:', {
+        groups: groups.filter(g => g.startsWith('EC ')),
+        primary,
+        additional,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     return { primary, additional };
   }

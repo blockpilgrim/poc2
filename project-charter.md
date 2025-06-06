@@ -636,9 +636,9 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** POC Stage - Complete Authentication System ✅
+**Phase:** POC Stage - Entra ID Groups & Roles Integration
 
-**Status:** Full end-to-end authentication flow successfully tested and validated with real Azure AD integration.
+**Status:** Phase 3 (Security Middleware Updates) completed. Authentication system now supports both Entra ID groups/roles and legacy D365-based authentication with feature flag control.
 
 ### ✅ Completed Items:
 
@@ -778,19 +778,35 @@ AZURE_GROUP_CLAIM_TYPE=securityGroup
 - [x] Added optional `organization` field for D365 data
 - [x] Preserves backward compatibility with legacy User model
 
-#### Phase 3: Security Middleware Updates
+#### ✅ Phase 3: Security Middleware Updates (COMPLETED)
 
 **3.1 Update Auth Middleware** (`auth.middleware.ts`)
-- [ ] Modify `requireRoles` to use `appRoles` from Entra ID
-- [ ] Create new `enforceInitiativeFromGroups` middleware
-- [ ] Update logging to include groups for audit trail
-- [ ] Maintain backward compatibility during transition
+- [x] Modified `requireRoles` to support Entra ID app roles with role hierarchy
+- [x] Created new `enforceInitiativeFromGroups` middleware for group-based security
+- [x] Updated authentication logging to include groups for comprehensive audit trail
+- [x] Implemented backward compatibility with `ENTRA_GROUPS_ENABLED` feature flag
+- [x] Added `enforceInitiative` wrapper for seamless migration
 
-**3.2 Create Group-Based Security Utilities**
-- [ ] Helper functions for group validation
-- [ ] Initiative extraction from JWT claims
-- [ ] Role hierarchy validation
-- [ ] Cross-initiative access detection
+**3.2 Create Group-Based Security Utilities** (`group-security.utils.ts`)
+- [x] Created comprehensive security utilities with role hierarchy support
+- [x] Implemented initiative extraction from JWT claims with multi-group handling
+- [x] Added role hierarchy validation (Admin → Network-Wide → Partner roles)
+- [x] Built cross-initiative access detection with security event logging
+- [x] Added helper functions for security context creation
+
+**3.3 Security Improvements Implemented**
+- [x] Enhanced security event logging with structured format
+- [x] Added consistent handling for users with multiple initiative groups (alphabetical priority)
+- [x] Improved error handling for missing organization data with contextual logging
+- [x] Created comprehensive test suites for middleware and utilities
+- [x] Documented security upgrade path with production TODOs
+
+**3.4 Production Security Considerations Documented**
+- [x] Created `SECURITY-NOTES.md` with critical production requirements
+- [x] Documented JWT algorithm migration path (HS256 → RS256)
+- [x] Outlined session storage requirements (Redis implementation)
+- [x] Specified rate limiting needs for auth endpoints
+- [x] Defined security event logging infrastructure requirements
 
 #### Phase 4: D365 Service Refactoring
 
@@ -853,6 +869,14 @@ AZURE_GROUP_CLAIM_TYPE=securityGroup
 - TypeScript compilation issues resolved
 - Shared package dependencies configured
 - Backend builds successfully with type safety
+
+### Recent Progress (Phase 3 Completion):
+- **Security Middleware**: Full support for Entra ID groups and app roles with backward compatibility
+- **Role Hierarchy**: Admin role inherits all permissions, network-wide roles inherit partner permissions
+- **Multiple Groups Handling**: Consistent alphabetical sorting when users have multiple initiatives
+- **Audit Trail**: Comprehensive security event logging with groups, roles, and access attempts
+- **Production Readiness**: Documented critical security requirements in `SECURITY-NOTES.md`
+- **Testing**: Created comprehensive test suites for all security components
 
 
 ---

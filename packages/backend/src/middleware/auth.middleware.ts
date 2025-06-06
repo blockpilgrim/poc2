@@ -2,6 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import { jwtService } from '../services/jwt.service';
 import { ExtendedJWTPayload } from '../types/auth';
 import { AppError } from '../utils/errors';
+import { 
+  hasRequiredRole, 
+  extractInitiativeFromJWT,
+  detectCrossInitiativeAccess,
+  logSecurityEvent,
+  createSecurityContext
+} from '../utils/group-security.utils';
+import { config } from '../config';
 
 // Extend Express Request type to include authenticated user
 declare global {
@@ -18,7 +26,7 @@ declare global {
  * Extracts and validates the JWT from the Authorization header
  * Attaches the decoded user context to the request for downstream use
  */
-export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+export const authenticateToken = (req: Request, res: Response, next: NextFunction): void => {
   try {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
@@ -38,7 +46,17 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     }
 
     // Verify initiative claim is present (critical security boundary)
-    if (!decoded.initiative) {
+    // Handle both Entra ID groups and legacy D365-based initiatives
+    if (config.ENTRA_GROUPS_ENABLED && decoded.groups && decoded.groups.length > 0) {
+      // New approach: Extract initiative from Entra ID groups
+      try {
+        const userInitiative = extractInitiativeFromJWT(decoded);
+        decoded.initiative = userInitiative;
+      } catch (error) {
+        throw new AppError('No valid initiative groups assigned', 403);
+      }
+    } else if (!decoded.initiative) {
+      // Legacy approach: Initiative must be in JWT from D365
       throw new AppError('Token missing required initiative claim', 403);
     }
 
@@ -46,39 +64,43 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     req.user = decoded;
     req.token = token;
 
-    // Log successful authentication for audit trail
-    console.log('User authenticated:', {
+    // Log successful authentication for audit trail with groups
+    const securityContext = createSecurityContext(decoded);
+    logSecurityEvent('ACCESS_GRANTED', {
       userId: decoded.sub,
       email: decoded.email,
-      initiative: decoded.initiative,
+      groups: decoded.groups,
       roles: decoded.roles,
-      path: req.path,
-      method: req.method
+      initiative: securityContext.initiative,
+      requestedResource: `${req.method} ${req.path}`
     });
 
     next();
   } catch (error) {
     // Handle different error types gracefully
     if (error instanceof AppError) {
-      return res.status(error.statusCode).json({
+      res.status(error.statusCode).json({
         error: error.message,
         code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN'
       });
+      return;
     }
 
     // Handle JWT-specific errors
     if (error instanceof Error) {
       if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({
+        res.status(401).json({
           error: 'Token has expired',
           code: 'TOKEN_EXPIRED'
         });
+        return;
       }
       if (error.name === 'JsonWebTokenError') {
-        return res.status(401).json({
+        res.status(401).json({
           error: 'Invalid token',
           code: 'INVALID_TOKEN'
         });
+        return;
       }
     }
 
@@ -88,6 +110,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
       error: 'Authentication failed',
       code: 'AUTH_ERROR'
     });
+    return;
   }
 };
 
@@ -124,8 +147,9 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction) =
 };
 
 /**
- * Middleware to enforce specific roles
+ * Middleware to enforce specific roles with Entra ID app roles support
  * Must be used after authenticateToken middleware
+ * Supports role hierarchy (e.g., Admin has all permissions)
  * @param allowedRoles - Array of roles that are allowed access
  */
 export const requireRoles = (...allowedRoles: string[]) => {
@@ -139,14 +163,20 @@ export const requireRoles = (...allowedRoles: string[]) => {
     }
 
     const userRoles = req.user.roles || [];
-    const hasRequiredRole = allowedRoles.some(role => userRoles.includes(role));
+    
+    // Use Entra ID role hierarchy if enabled, otherwise simple array check
+    const hasRole = config.ENTRA_GROUPS_ENABLED 
+      ? hasRequiredRole(userRoles, allowedRoles)
+      : allowedRoles.some(role => userRoles.includes(role));
 
-    if (!hasRequiredRole) {
-      console.warn('Access denied - insufficient roles:', {
+    if (!hasRole) {
+      logSecurityEvent('ACCESS_DENIED', {
         userId: req.user.sub,
-        userRoles,
-        requiredRoles: allowedRoles,
-        path: req.path
+        email: req.user.email,
+        groups: req.user.groups,
+        roles: userRoles,
+        requestedResource: `${req.method} ${req.path}`,
+        reason: `Missing required roles: ${allowedRoles.join(', ')}`
       });
 
       res.status(403).json({
@@ -193,6 +223,96 @@ export const requireInitiatives = (...allowedInitiatives: string[]) => {
 
     next();
   };
+};
+
+/**
+ * Middleware to enforce initiative based on Entra ID groups
+ * Extracts initiative from security groups and validates access
+ * Must be used after authenticateToken middleware
+ * @param requiredInitiative - Optional specific initiative to enforce
+ */
+export const enforceInitiativeFromGroups = (requiredInitiative?: string) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({
+        error: 'Authentication required',
+        code: 'UNAUTHORIZED'
+      });
+      return;
+    }
+
+    try {
+      // Extract initiative from groups
+      const userInitiative = extractInitiativeFromJWT(req.user);
+      
+      // If specific initiative is required, validate it
+      if (requiredInitiative && userInitiative !== requiredInitiative) {
+        const crossInitiativeAttempt = detectCrossInitiativeAccess(req.user, requiredInitiative);
+        
+        if (crossInitiativeAttempt) {
+          logSecurityEvent('CROSS_INITIATIVE_ATTEMPT', {
+            userId: req.user.sub,
+            email: req.user.email,
+            groups: req.user.groups,
+            initiative: userInitiative,
+            requestedResource: `${req.method} ${req.path}`,
+            reason: `Attempted to access ${requiredInitiative} from ${userInitiative}`
+          });
+        }
+
+        res.status(403).json({
+          error: 'Access denied for this initiative',
+          code: 'FORBIDDEN'
+        });
+        return;
+      }
+
+      // Attach derived initiative to request for downstream use
+      req.user.initiative = userInitiative;
+      next();
+    } catch (error) {
+      // Handle cases where user has no valid initiative groups
+      logSecurityEvent('ACCESS_DENIED', {
+        userId: req.user.sub,
+        email: req.user.email,
+        groups: req.user.groups,
+        requestedResource: `${req.method} ${req.path}`,
+        reason: error instanceof Error ? error.message : 'No valid initiative groups'
+      });
+
+      res.status(403).json({
+        error: error instanceof Error ? error.message : 'No valid initiative assigned',
+        code: 'FORBIDDEN'
+      });
+    }
+  };
+};
+
+/**
+ * Backward-compatible initiative enforcement middleware
+ * Uses either Entra ID groups or legacy initiative field based on feature flag
+ * @param requiredInitiative - Optional specific initiative to enforce
+ */
+export const enforceInitiative = (requiredInitiative?: string) => {
+  // Use new group-based approach if enabled
+  if (config.ENTRA_GROUPS_ENABLED) {
+    return enforceInitiativeFromGroups(requiredInitiative);
+  }
+  
+  // Fall back to legacy approach
+  return requiredInitiative 
+    ? requireInitiatives(requiredInitiative)
+    : (req: Request, res: Response, next: NextFunction) => {
+        // Just ensure initiative exists (already validated in authenticateToken)
+        if (!req.user || !req.user.initiative) {
+          res.status(403).json({
+            error: 'No initiative assigned',
+            code: 'FORBIDDEN'
+          });
+          return;
+        }
+        next();
+      };
 };
 
 /**
