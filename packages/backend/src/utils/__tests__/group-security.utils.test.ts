@@ -7,6 +7,7 @@ import {
   detectCrossInitiativeAccess,
   getUserInitiatives,
   validateGroups,
+  validateAndFilterInitiativeGroups,
   isAdmin,
   hasNetworkWideAccess,
   createSecurityContext,
@@ -73,7 +74,28 @@ describe('Group Security Utilities', () => {
   });
 
   describe('extractInitiativeFromJWT', () => {
-    it('should extract initiative from groups', () => {
+    it('should extract initiative from new format groups', () => {
+      const payload: ExtendedJWTPayload = {
+        sub: 'user-123',
+        email: 'user@example.com',
+        groups: ['Partner Portal - EC Arkansas', 'Other Group'],
+        roles: [],
+        permissions: [],
+        name: 'Test User',
+        iat: 0,
+        exp: 0,
+        initiative: ''
+      };
+
+      vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockReturnValue('ec-arkansas');
+
+      const result = extractInitiativeFromJWT(payload);
+      
+      expect(result).toBe('ec-arkansas');
+      expect(initiativeMappingService.extractInitiativeFromGroups).toHaveBeenCalledWith(['Partner Portal - EC Arkansas', 'Other Group']);
+    });
+
+    it('should extract initiative from legacy format groups', () => {
       const payload: ExtendedJWTPayload = {
         sub: 'user-123',
         email: 'user@example.com',
@@ -92,6 +114,27 @@ describe('Group Security Utilities', () => {
       
       expect(result).toBe('ec-arkansas');
       expect(initiativeMappingService.extractInitiativeFromGroups).toHaveBeenCalledWith(['EC Arkansas', 'Other Group']);
+    });
+
+    it('should handle testing groups', () => {
+      const payload: ExtendedJWTPayload = {
+        sub: 'user-123',
+        email: 'user@example.com',
+        groups: ['Partner Portal - EC Oregon - Testing', 'Other Group'],
+        roles: [],
+        permissions: [],
+        name: 'Test User',
+        iat: 0,
+        exp: 0,
+        initiative: ''
+      };
+
+      vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockReturnValue('ec-oregon');
+
+      const result = extractInitiativeFromJWT(payload);
+      
+      expect(result).toBe('ec-oregon');
+      expect(initiativeMappingService.extractInitiativeFromGroups).toHaveBeenCalledWith(['Partner Portal - EC Oregon - Testing', 'Other Group']);
     });
 
     it('should fall back to direct initiative claim when groups fail', () => {
@@ -138,7 +181,28 @@ describe('Group Security Utilities', () => {
   });
 
   describe('validateUserInitiative', () => {
-    it('should validate initiative through groups', () => {
+    it('should validate initiative through new format groups', () => {
+      const payload: ExtendedJWTPayload = {
+        sub: 'user-123',
+        email: 'user@example.com',
+        groups: ['Partner Portal - EC Tennessee'],
+        roles: [],
+        permissions: [],
+        name: 'Test User',
+        initiative: '',
+        iat: 0,
+        exp: 0
+      };
+
+      vi.mocked(initiativeMappingService.hasAccessToInitiative).mockReturnValue(true);
+
+      const result = validateUserInitiative(payload, 'ec-tennessee');
+      
+      expect(result).toBe(true);
+      expect(initiativeMappingService.hasAccessToInitiative).toHaveBeenCalledWith(['Partner Portal - EC Tennessee'], 'ec-tennessee');
+    });
+
+    it('should validate initiative through legacy format groups', () => {
       const payload: ExtendedJWTPayload = {
         sub: 'user-123',
         email: 'user@example.com',
@@ -179,7 +243,27 @@ describe('Group Security Utilities', () => {
   });
 
   describe('detectCrossInitiativeAccess', () => {
-    it('should detect cross-initiative access attempts', () => {
+    it('should detect cross-initiative access attempts with new format groups', () => {
+      const payload: ExtendedJWTPayload = {
+        sub: 'user-123',
+        email: 'user@example.com',
+        groups: ['Partner Portal - EC Arkansas'],
+        roles: [],
+        permissions: [],
+        name: 'Test User',
+        initiative: '',
+        iat: 0,
+        exp: 0
+      };
+
+      vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockReturnValue('ec-arkansas');
+
+      const result = detectCrossInitiativeAccess(payload, 'ec-tennessee');
+      
+      expect(result).toBe(true);
+    });
+
+    it('should detect cross-initiative access attempts with legacy format groups', () => {
       const payload: ExtendedJWTPayload = {
         sub: 'user-123',
         email: 'user@example.com',
@@ -203,7 +287,7 @@ describe('Group Security Utilities', () => {
       const payload: ExtendedJWTPayload = {
         sub: 'user-123',
         email: 'user@example.com',
-        groups: ['EC Kentucky'],
+        groups: ['Partner Portal - EC Kentucky'],
         roles: [],
         permissions: [],
         name: 'Test User',
@@ -265,17 +349,52 @@ describe('Group Security Utilities', () => {
 
   describe('validateGroups', () => {
     it('should filter valid group strings', () => {
-      const groups = ['EC Arkansas', '', 'EC Tennessee', null, 'EC Kentucky', 123];
+      const groups = ['Partner Portal - EC Arkansas', '', 'EC Tennessee', null, 'Partner Portal - EC Kentucky - Testing', 123];
       
       const result = validateGroups(groups);
       
-      expect(result).toEqual(['EC Arkansas', 'EC Tennessee', 'EC Kentucky']);
+      expect(result).toEqual(['Partner Portal - EC Arkansas', 'EC Tennessee', 'Partner Portal - EC Kentucky - Testing']);
     });
 
     it('should return empty array for non-array input', () => {
       expect(validateGroups(null)).toEqual([]);
       expect(validateGroups(undefined)).toEqual([]);
       expect(validateGroups('not an array')).toEqual([]);
+    });
+  });
+
+  describe('validateAndFilterInitiativeGroups', () => {
+    it('should filter to only valid initiative groups', () => {
+      const groups = [
+        'Partner Portal - EC Arkansas',
+        'EC Oregon',
+        'Some Other Group',
+        'Partner Portal - EC Tennessee - Testing',
+        'Random Group',
+        'EC Kentucky',
+        ''
+      ];
+      
+      const result = validateAndFilterInitiativeGroups(groups);
+      
+      expect(result).toEqual([
+        'Partner Portal - EC Arkansas',
+        'EC Oregon',
+        'Partner Portal - EC Tennessee - Testing',
+        'EC Kentucky'
+      ]);
+    });
+
+    it('should return empty array for no valid initiative groups', () => {
+      const groups = ['Some Group', 'Another Group', 'Random Group'];
+      const result = validateAndFilterInitiativeGroups(groups);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle mixed valid and invalid inputs', () => {
+      const groups = ['Partner Portal - EC Arkansas', null, 'Random', undefined, 'EC Oregon'];
+      const result = validateAndFilterInitiativeGroups(groups);
+      expect(result).toEqual(['Partner Portal - EC Arkansas', 'EC Oregon']);
     });
   });
 

@@ -86,22 +86,52 @@ describe('Authentication Integration Tests', () => {
     Object.assign(config, mockConfig);
 
     // Default mocks for initiative mapping service to prevent errors
+    // Supports both new and legacy group naming conventions
     vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockImplementation((groups: string[]) => {
       if (groups && groups.length > 0) {
+        // New format groups
+        if (groups.includes('Partner Portal - EC Arkansas') || groups.includes('Partner Portal - EC Arkansas - Testing')) return 'ec-arkansas';
+        if (groups.includes('Partner Portal - EC Tennessee') || groups.includes('Partner Portal - EC Tennessee - Testing')) return 'ec-tennessee';
+        if (groups.includes('Partner Portal - EC Oregon') || groups.includes('Partner Portal - EC Oregon - Testing')) return 'ec-oregon';
+        
+        // Legacy format groups (for backward compatibility)
         if (groups.includes('EC Arkansas')) return 'ec-arkansas';
         if (groups.includes('EC Tennessee')) return 'ec-tennessee';
+        if (groups.includes('EC Oregon')) return 'ec-oregon';
       }
       throw new Error('No initiative found');
     });
 
     vi.mocked(initiativeMappingService.getAllUserInitiatives).mockImplementation((groups: string[]) => {
       const initiatives = [];
-      if (groups && groups.includes('EC Arkansas')) {
-        initiatives.push({ groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' });
+      
+      // Check for Arkansas groups (new format first, then legacy)
+      if (groups.includes('Partner Portal - EC Arkansas')) {
+        initiatives.push({ groupName: 'Partner Portal - EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' });
+      } else if (groups.includes('Partner Portal - EC Arkansas - Testing')) {
+        initiatives.push({ groupName: 'Partner Portal - EC Arkansas - Testing', initiativeId: 'ec-arkansas', displayName: 'Arkansas', isTesting: true });
+      } else if (groups.includes('EC Arkansas')) {
+        initiatives.push({ groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas', isLegacy: true });
       }
-      if (groups && groups.includes('EC Tennessee')) {
-        initiatives.push({ groupName: 'EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee' });
+      
+      // Check for Tennessee groups
+      if (groups.includes('Partner Portal - EC Tennessee')) {
+        initiatives.push({ groupName: 'Partner Portal - EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee' });
+      } else if (groups.includes('Partner Portal - EC Tennessee - Testing')) {
+        initiatives.push({ groupName: 'Partner Portal - EC Tennessee - Testing', initiativeId: 'ec-tennessee', displayName: 'Tennessee', isTesting: true });
+      } else if (groups.includes('EC Tennessee')) {
+        initiatives.push({ groupName: 'EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee', isLegacy: true });
       }
+      
+      // Check for Oregon groups
+      if (groups.includes('Partner Portal - EC Oregon')) {
+        initiatives.push({ groupName: 'Partner Portal - EC Oregon', initiativeId: 'ec-oregon', displayName: 'Oregon' });
+      } else if (groups.includes('Partner Portal - EC Oregon - Testing')) {
+        initiatives.push({ groupName: 'Partner Portal - EC Oregon - Testing', initiativeId: 'ec-oregon', displayName: 'Oregon', isTesting: true });
+      } else if (groups.includes('EC Oregon')) {
+        initiatives.push({ groupName: 'EC Oregon', initiativeId: 'ec-oregon', displayName: 'Oregon', isLegacy: true });
+      }
+      
       return initiatives;
     });
   });
@@ -158,7 +188,7 @@ describe('Authentication Integration Tests', () => {
         accessToken: 'mock-access-token'
       };
 
-      const mockGroups = ['EC Arkansas', 'Other Group'];
+      const mockGroups = ['Partner Portal - EC Arkansas', 'Other Group'];
       const mockRoles = ['Admin'];
       const mockClaims = {
         oid: 'user-123',
@@ -294,13 +324,16 @@ describe('Authentication Integration Tests', () => {
       // Mock JWT verification to return our test payload
       vi.mocked(jwtService.verifyAccessToken).mockImplementation((token: string) => {
         if (token === 'arkansas-token') {
-          return createMockJWT('ec-arkansas', ['EC Arkansas']);
+          return createMockJWT('ec-arkansas', ['Partner Portal - EC Arkansas']);
         }
         if (token === 'tennessee-token') {
-          return createMockJWT('ec-tennessee', ['EC Tennessee']);
+          return createMockJWT('ec-tennessee', ['Partner Portal - EC Tennessee']);
         }
         if (token === 'multi-initiative-token') {
-          return createMockJWT('ec-arkansas', ['EC Arkansas', 'EC Tennessee']);
+          return createMockJWT('ec-arkansas', ['Partner Portal - EC Arkansas', 'Partner Portal - EC Tennessee']);
+        }
+        if (token === 'legacy-arkansas-token') {
+          return createMockJWT('ec-arkansas', ['EC Arkansas']);
         }
         const error = new Error('Invalid token');
         error.name = 'JsonWebTokenError';
@@ -308,6 +341,10 @@ describe('Authentication Integration Tests', () => {
       });
 
       vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockImplementation((groups: string[]) => {
+        // New format
+        if (groups.includes('Partner Portal - EC Arkansas')) return 'ec-arkansas';
+        if (groups.includes('Partner Portal - EC Tennessee')) return 'ec-tennessee';
+        // Legacy format
         if (groups.includes('EC Arkansas')) return 'ec-arkansas';
         if (groups.includes('EC Tennessee')) return 'ec-tennessee';
         throw new Error('No initiative found');
@@ -315,11 +352,15 @@ describe('Authentication Integration Tests', () => {
 
       vi.mocked(initiativeMappingService.getAllUserInitiatives).mockImplementation((groups: string[]) => {
         const initiatives = [];
-        if (groups.includes('EC Arkansas')) {
-          initiatives.push({ groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' });
+        if (groups.includes('Partner Portal - EC Arkansas')) {
+          initiatives.push({ groupName: 'Partner Portal - EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' });
+        } else if (groups.includes('EC Arkansas')) {
+          initiatives.push({ groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas', isLegacy: true });
         }
-        if (groups.includes('EC Tennessee')) {
-          initiatives.push({ groupName: 'EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee' });
+        if (groups.includes('Partner Portal - EC Tennessee')) {
+          initiatives.push({ groupName: 'Partner Portal - EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee' });
+        } else if (groups.includes('EC Tennessee')) {
+          initiatives.push({ groupName: 'EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee', isLegacy: true });
         }
         return initiatives;
       });
@@ -369,7 +410,7 @@ describe('Authentication Integration Tests', () => {
       
       // Mock cross-initiative detection
       vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockImplementation((groups: string[]) => {
-        if (groups.includes('EC Tennessee')) return 'ec-tennessee';
+        if (groups.includes('Partner Portal - EC Tennessee') || groups.includes('EC Tennessee')) return 'ec-tennessee';
         throw new Error('Cross-initiative access detected');
       });
 
@@ -389,7 +430,7 @@ describe('Authentication Integration Tests', () => {
           sub: 'user-123',
           email: 'user@example.com',
           name: 'Test User',
-          groups: ['EC Arkansas'],
+          groups: ['Partner Portal - EC Arkansas'],
           permissions: [],
           initiative: 'ec-arkansas',
           initiativeName: 'Arkansas Partner Portal',
@@ -417,7 +458,7 @@ describe('Authentication Integration Tests', () => {
 
       vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockReturnValue('ec-arkansas');
       vi.mocked(initiativeMappingService.getAllUserInitiatives).mockReturnValue([
-        { groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' }
+        { groupName: 'Partner Portal - EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' }
       ]);
     });
 
@@ -507,7 +548,7 @@ describe('Authentication Integration Tests', () => {
       vi.mocked(sessionService.getAndRemoveSession).mockReturnValue(mockSession);
       vi.mocked(authService.acquireTokenByCode).mockResolvedValue(mockAuthResult as any);
       vi.mocked(authService.extractGroupsAndRoles).mockReturnValue({
-        groups: ['EC Arkansas'],
+        groups: ['Partner Portal - EC Arkansas'],
         roles: ['FosterPartner'],
         claims: {
           oid: 'user-123',
@@ -655,7 +696,7 @@ describe('Authentication Integration Tests', () => {
         sub: 'user-123',
         email: 'user@example.com',
         name: 'Test User',
-        groups: ['EC Arkansas'],
+        groups: ['Partner Portal - EC Arkansas'],
         roles: ['FosterPartner'],
         permissions: ['read:leads'],
         initiative: 'ec-arkansas',

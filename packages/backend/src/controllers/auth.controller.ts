@@ -100,7 +100,21 @@ export class AuthController {
         try {
           initiative = initiativeMappingService.extractInitiativeFromGroups(groupNames);
           initiativeName = initiativeMappingService.getInitiativeDisplayName(initiative);
+          
+          console.log('[AUTH] User authenticated successfully:', {
+            email: authResult.account?.username,
+            initiative,
+            initiativeName,
+            groupCount: groupNames.length
+          });
         } catch (error) {
+          console.error('[AUTH] Initiative extraction failed:', {
+            error: error instanceof Error ? error.message : error,
+            email: authResult.account?.username,
+            groupCount: groups.length,
+            hasGroupNames: groupNames.length > 0
+          });
+          
           throw new AppError(
             'User is not assigned to any initiative group. Please contact your administrator.',
             403

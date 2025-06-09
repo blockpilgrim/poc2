@@ -39,6 +39,12 @@ const envSchema = z.object({
   ENTRA_GROUPS_ENABLED: z.string().default('true').transform((val) => val === 'true'),
   D365_ORG_DATA_ENABLED: z.string().default('true').transform((val) => val === 'true'),
   AZURE_GROUP_CLAIM_TYPE: z.enum(['securityGroup', 'all']).default('securityGroup'),
+  
+  // Group naming configuration
+  PARTNER_PORTAL_GROUP_PREFIX: z.string().default('Partner Portal - EC '),
+  LEGACY_GROUP_PREFIX: z.string().default('EC '),
+  TESTING_GROUP_SUFFIX: z.string().default(' - Testing'),
+  ENABLE_LEGACY_GROUP_SUPPORT: z.string().default('true').transform((val) => val === 'true'),
 });
 
 // Parse and validate environment variables

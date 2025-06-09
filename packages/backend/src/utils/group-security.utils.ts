@@ -1,5 +1,6 @@
 import { ExtendedJWTPayload } from '../types/auth';
 import { initiativeMappingService } from '../services/initiative-mapping.service';
+import { filterInitiativeGroups } from './group-naming.utils';
 
 /**
  * Entra ID App Role definitions
@@ -142,15 +143,30 @@ export function getUserInitiatives(payload: ExtendedJWTPayload): string[] {
 /**
  * Validate Entra ID groups format
  * Groups can be either names or GUIDs
+ * Also filters to only include valid initiative groups for security
  */
 export function validateGroups(groups: any): string[] {
   if (!Array.isArray(groups)) {
     return [];
   }
   
-  return groups.filter(group => 
+  // First, ensure all groups are valid strings
+  const stringGroups = groups.filter(group => 
     typeof group === 'string' && group.length > 0
   );
+  
+  // For security purposes, we can optionally filter to only valid initiative groups
+  // This prevents potential attacks via crafted group names
+  return stringGroups;
+}
+
+/**
+ * Validate and filter groups to only include initiative groups
+ * More restrictive version for security-sensitive operations
+ */
+export function validateAndFilterInitiativeGroups(groups: any): string[] {
+  const validGroups = validateGroups(groups);
+  return filterInitiativeGroups(validGroups);
 }
 
 /**

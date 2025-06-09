@@ -1,9 +1,15 @@
 import { AppError } from '../utils/errors';
+import { 
+  isValidInitiativeGroup, 
+  findBestInitiativeGroup
+} from '../utils/group-naming.utils';
 
 export interface InitiativeMapping {
   groupName: string;
   initiativeId: string;
   displayName: string;
+  isLegacy?: boolean;
+  isTesting?: boolean;
 }
 
 export interface ThemeConfig {
@@ -18,12 +24,28 @@ export class InitiativeMappingService {
   private static instance: InitiativeMappingService;
 
   // Map of Entra ID group names to initiative configurations
+  // Supports both legacy ("EC State") and new ("Partner Portal - EC State") formats
   private readonly initiativeMappings: Map<string, InitiativeMapping> = new Map([
-    ['EC Arkansas', { groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' }],
-    ['EC Oregon', { groupName: 'EC Oregon', initiativeId: 'ec-oregon', displayName: 'Oregon' }],
-    ['EC Tennessee', { groupName: 'EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee' }],
-    ['EC Kentucky', { groupName: 'EC Kentucky', initiativeId: 'ec-kentucky', displayName: 'Kentucky' }],
-    ['EC Oklahoma', { groupName: 'EC Oklahoma', initiativeId: 'ec-oklahoma', displayName: 'Oklahoma' }],
+    // Legacy format groups (for backward compatibility)
+    ['EC Arkansas', { groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas', isLegacy: true }],
+    ['EC Oregon', { groupName: 'EC Oregon', initiativeId: 'ec-oregon', displayName: 'Oregon', isLegacy: true }],
+    ['EC Tennessee', { groupName: 'EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee', isLegacy: true }],
+    ['EC Kentucky', { groupName: 'EC Kentucky', initiativeId: 'ec-kentucky', displayName: 'Kentucky', isLegacy: true }],
+    ['EC Oklahoma', { groupName: 'EC Oklahoma', initiativeId: 'ec-oklahoma', displayName: 'Oklahoma', isLegacy: true }],
+    
+    // New format groups - Production
+    ['Partner Portal - EC Arkansas', { groupName: 'Partner Portal - EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' }],
+    ['Partner Portal - EC Oregon', { groupName: 'Partner Portal - EC Oregon', initiativeId: 'ec-oregon', displayName: 'Oregon' }],
+    ['Partner Portal - EC Tennessee', { groupName: 'Partner Portal - EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee' }],
+    ['Partner Portal - EC Kentucky', { groupName: 'Partner Portal - EC Kentucky', initiativeId: 'ec-kentucky', displayName: 'Kentucky' }],
+    ['Partner Portal - EC Oklahoma', { groupName: 'Partner Portal - EC Oklahoma', initiativeId: 'ec-oklahoma', displayName: 'Oklahoma' }],
+    
+    // New format groups - Testing
+    ['Partner Portal - EC Arkansas - Testing', { groupName: 'Partner Portal - EC Arkansas - Testing', initiativeId: 'ec-arkansas', displayName: 'Arkansas', isTesting: true }],
+    ['Partner Portal - EC Oregon - Testing', { groupName: 'Partner Portal - EC Oregon - Testing', initiativeId: 'ec-oregon', displayName: 'Oregon', isTesting: true }],
+    ['Partner Portal - EC Tennessee - Testing', { groupName: 'Partner Portal - EC Tennessee - Testing', initiativeId: 'ec-tennessee', displayName: 'Tennessee', isTesting: true }],
+    ['Partner Portal - EC Kentucky - Testing', { groupName: 'Partner Portal - EC Kentucky - Testing', initiativeId: 'ec-kentucky', displayName: 'Kentucky', isTesting: true }],
+    ['Partner Portal - EC Oklahoma - Testing', { groupName: 'Partner Portal - EC Oklahoma - Testing', initiativeId: 'ec-oklahoma', displayName: 'Oklahoma', isTesting: true }],
   ]);
 
   // Theme configurations per initiative
@@ -76,6 +98,7 @@ export class InitiativeMappingService {
 
   /**
    * Extract initiative from user's Entra ID groups
+   * Supports both legacy ("EC State") and new ("Partner Portal - EC State") formats
    * @param groups Array of group names from Entra ID
    * @returns Primary initiative ID
    * @throws AppError if no valid initiative group is found
@@ -85,14 +108,12 @@ export class InitiativeMappingService {
       throw new AppError('No groups provided', 400);
     }
 
-    // Find the first matching EC group
-    const initiativeGroup = groups.find(group => 
-      group.startsWith('EC ') && this.initiativeMappings.has(group)
-    );
+    // Find the best matching initiative group using new utility
+    const initiativeGroup = findBestInitiativeGroup(groups);
 
-    if (!initiativeGroup) {
+    if (!initiativeGroup || !this.initiativeMappings.has(initiativeGroup)) {
       throw new AppError(
-        'User is not assigned to any initiative. Please contact your administrator.',
+        'User is not assigned to any initiative group. Please contact your administrator.',
         403
       );
     }
@@ -118,10 +139,11 @@ export class InitiativeMappingService {
   /**
    * Get all initiative groups for a user
    * Useful for users with multiple initiative access
+   * Supports both legacy and new group naming conventions
    */
   getAllUserInitiatives(groups: string[]): InitiativeMapping[] {
     return groups
-      .filter(group => this.initiativeMappings.has(group))
+      .filter(group => isValidInitiativeGroup(group) && this.initiativeMappings.has(group))
       .map(group => this.initiativeMappings.get(group)!)
       .filter(Boolean);
   }
@@ -152,8 +174,10 @@ export class InitiativeMappingService {
    * 
    * Priority rules:
    * 1. If user has only one initiative group, use it
-   * 2. If user has multiple groups, use alphabetical order for consistency
-   * 3. Log when multiple initiatives are found for audit purposes
+   * 2. If user has multiple groups, prefer new format over legacy
+   * 3. Prefer production over testing groups
+   * 4. Use alphabetical order for final consistency
+   * 5. Log when multiple initiatives are found for audit purposes
    */
   resolvePrimaryInitiative(groups: string[]): {
     primary: string;
@@ -165,10 +189,19 @@ export class InitiativeMappingService {
       throw new AppError('No valid initiative groups found', 403);
     }
 
-    // Sort initiatives alphabetically for consistent behavior
-    const sortedInitiatives = userInitiatives.sort((a, b) => 
-      a.initiativeId.localeCompare(b.initiativeId)
-    );
+    // Sort initiatives by preference: new format first, production over testing, then alphabetical
+    const sortedInitiatives = userInitiatives.sort((a, b) => {
+      // Prefer new format over legacy
+      if (!a.isLegacy && b.isLegacy) return -1;
+      if (a.isLegacy && !b.isLegacy) return 1;
+      
+      // Prefer production over testing
+      if (!a.isTesting && b.isTesting) return -1;
+      if (a.isTesting && !b.isTesting) return 1;
+      
+      // Alphabetical order for consistency
+      return a.initiativeId.localeCompare(b.initiativeId);
+    });
 
     const primary = sortedInitiatives[0].initiativeId;
     const additional = sortedInitiatives
@@ -177,10 +210,12 @@ export class InitiativeMappingService {
 
     // Log when user has multiple initiatives for security audit
     if (additional.length > 0) {
+      const validInitiativeGroups = groups.filter(isValidInitiativeGroup);
       console.warn('[INITIATIVE] User has multiple initiative groups:', {
-        groups: groups.filter(g => g.startsWith('EC ')),
+        groups: validInitiativeGroups,
         primary,
         additional,
+        selectedGroup: sortedInitiatives[0].groupName,
         timestamp: new Date().toISOString()
       });
     }
