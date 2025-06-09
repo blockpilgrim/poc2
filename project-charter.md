@@ -666,19 +666,28 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
   - *Update default JWT secret validation to prevent easy guessing during demos*
   - *Replace Math.random() with crypto.randomBytes() for CSRF protection*
 
+* **[ ] Create `/api/auth/profile` Endpoint**
+  - *Referenced in architecture notes but not yet implemented*
+  - *Should combine Entra ID identity data with D365 organization data*
+  - *Return user profile, assigned initiative, theme config, and role-based permissions*
+
 **🎯 Next Steps & High-Level Checklist:**
 
 * **[ ] Implement Frontend Authentication Flow**
-  - *Architecture Note: Use existing JWT structure with groups/roles claims. Frontend auth context should call `/api/auth/profile` to get complete user data and initiative mapping. Reference line 461-469 for JWT payload structure.*
+  - [ ] Create React authentication context/provider
+  - [ ] Build login/logout components with redirect handling
+  - [ ] Implement protected route guards
+  - [ ] Add token management (storage, refresh, API interceptors)
+  - *Architecture Note: Use existing JWT structure with groups/roles claims. Frontend auth context should call `/api/auth/profile` endpoint for complete user data and initiative mapping. Reference JWT payload structure in project charter Initiative-Based Architecture section.*
 
 * **[ ] Build the Core User Profile Endpoint**
-  - *Architecture Note: Combine Entra ID identity data with D365 organization data. Use `findBestInitiativeGroup()` utility (line 183) to determine primary initiative from user's groups. This endpoint should return user profile, assigned initiative, theme config, and role-based permissions.*
+  - *Architecture Note: This may be partially addressed by the `/api/auth/profile` endpoint above. Combine Entra ID identity data with D365 organization data. Use `findBestInitiativeGroup()` utility in `group-naming.utils.ts` to determine primary initiative from user's groups.*
 
 * **[ ] Implement Initiative-Based Theming**
-  - *Architecture Note: Reference theme configuration structure at line 510-528. Themes are mapped by initiative ID (not group name) for consistency. The frontend should apply theme based on the initiative derived from the user's primary group.*
+  - *Architecture Note: Reference theme configuration structure in project charter Initiative-Based Architecture section. Themes are mapped by initiative ID (not group name) for consistency. The frontend should apply theme based on the initiative derived from the user's primary group.*
 
 * **[ ] Finalize Development Environment Setup**
-  - *Architecture Note: Ensure environment variables for group naming (lines 43-47 in config) are properly configured. Test with both production and testing group formats to validate the priority system.*
+  - *Architecture Note: Ensure environment variables for group naming in `config/index.ts` are properly configured. Test with both production and testing group formats to validate the priority system.*
 
 **🏗️ Architecture Components Ready for POC:**
 - Group naming utilities at `/packages/backend/src/utils/group-naming.utils.ts`
