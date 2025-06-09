@@ -19,5 +19,6 @@ router.get('/config', asyncHandler(authController.getConfig));
 router.post('/logout', optionalAuth, asyncHandler(authController.logout));
 router.post('/refresh', asyncHandler(authController.refresh));
 router.get('/me', authenticateToken, asyncHandler(authController.me));
+router.get('/profile', authenticateToken, asyncHandler(authController.profile));
 
 export default router;

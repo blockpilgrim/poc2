@@ -17,8 +17,9 @@ This guide documents the Phase 4 refactoring of the D365 service, transitioning 
   - Security Groups → Initiative assignment (e.g., "EC Arkansas")
   - App Roles → Permissions (Admin, Foster Partner, etc.)
 - **D365**: Organization and business data only
-  - Contact → User's business profile
+  - Contact → User's business profile (queried by `msevtmgt_aadobjectid`)
   - Account → Organization details via `_parentcustomerid_value`
+  - `tc_organizationleadtype` → Organization type (e.g., "Foster")
 
 ## API Changes
 
@@ -35,7 +36,7 @@ getUserWithInitiative(email: string, d365Token: string): Promise<{
 ```typescript
 // Use this for fetching organization data
 getUserOrganization(
-  email: string,
+  azureObjectId: string,  // User's Azure AD Object ID
   d365Token: string
 ): Promise<OrganizationData | undefined>
 ```
@@ -65,7 +66,8 @@ if (config.ENTRA_GROUPS_ENABLED) {
   
   // Optionally fetch org data
   if (config.D365_ORG_DATA_ENABLED) {
-    organization = await d365Service.getUserOrganization(email, d365Token);
+    const azureObjectId = authResult.account.homeAccountId;
+    organization = await d365Service.getUserOrganization(azureObjectId, d365Token);
   }
 } else {
   // Legacy flow: Use getUserWithInitiative
@@ -118,9 +120,9 @@ When `D365_URL` is not configured:
 
 ### Production Mode
 When `D365_URL` is configured:
-1. Query Contact by email
+1. Query Contact by `msevtmgt_aadobjectid` (Azure AD Object ID)
 2. Get Account via `_parentcustomerid_value`
-3. Return organization details
+3. Return organization details with `tc_organizationleadtype`
 4. Handle failures gracefully (return `undefined`)
 
 ### Running Tests
@@ -143,6 +145,8 @@ The service implements graceful degradation:
 - [ ] Configure Entra ID App Registration with groups/roles
 - [ ] Enable feature flags in environment
 - [ ] Configure D365 credentials (optional)
+- [ ] Ensure D365 Contact records have `msevtmgt_aadobjectid` populated
+- [ ] Verify `tc_organizationleadtype` field on Account entity for org type
 - [ ] Test auth flow with both Entra ID and D365
 - [ ] Monitor logs for D365 failures
 - [ ] Verify JWT tokens include correct claims

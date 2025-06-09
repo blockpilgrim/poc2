@@ -126,14 +126,17 @@ export class AuthController {
           try {
             const d365Token = await authService.getD365AccessToken();
             if (d365Token) {
+              // Use Azure AD Object ID for reliable contact lookup
+              const azureObjectId = authResult.account.homeAccountId;
               organization = await d365Service.getUserOrganization(
-                authResult.account.username,
+                azureObjectId,
                 d365Token
               );
               
               // Log successful org data fetch
               console.log('[AUTH] Organization data fetched:', {
-                userId: authResult.account.homeAccountId,
+                userId: azureObjectId,
+                email: authResult.account.username,
                 orgId: organization?.id,
                 orgName: organization?.name
               });
@@ -314,7 +317,8 @@ export class AuthController {
 
   /**
    * GET /api/auth/me
-   * Return current user with initiative
+   * Return current user with initiative and theme configuration
+   * Enhanced to include organization data and theme for complete user context
    */
   async me(req: Request, res: Response): Promise<void> {
     try {
@@ -326,12 +330,16 @@ export class AuthController {
         throw new AppError('User not authenticated', 401);
       }
 
-      // Return user info including initiative
+      // Get theme configuration for the user's initiative
+      const theme = initiativeMappingService.getThemeForInitiative(user.initiative);
+
+      // Return enhanced user info including initiative, theme, and organization
       res.json({
         user: {
           id: user.sub,
           email: user.email,
           name: user.name,
+          azureId: user.azureId,
           roles: user.roles,
           permissions: user.permissions,
         },
@@ -339,7 +347,11 @@ export class AuthController {
           id: user.initiative,
           name: user.initiativeName,
           code: user.initiativeCode,
+          displayName: initiativeMappingService.getInitiativeDisplayName(user.initiative),
         },
+        organization: user.organization || null, // D365 org data if available
+        groups: user.groups || [],
+        theme: theme || null, // Theme configuration for dynamic UI
       });
     } catch (error) {
       console.error('Get user error:', error);
@@ -347,6 +359,88 @@ export class AuthController {
         throw error;
       }
       throw new AppError('Failed to get user info', 500);
+    }
+  }
+
+  /**
+   * GET /api/auth/profile
+   * Return complete user profile with all context data
+   * Combines Entra ID identity, D365 organization data, initiative, and theme configuration
+   * This endpoint provides everything the frontend needs to render a personalized experience
+   */
+  async profile(req: Request, res: Response): Promise<void> {
+    try {
+      const user = (req as any).user as ExtendedJWTPayload;
+
+      if (!user) {
+        throw new AppError('User not authenticated', 401);
+      }
+
+      // Get theme configuration for the user's initiative
+      const theme = initiativeMappingService.getThemeForInitiative(user.initiative);
+      if (!theme) {
+        console.warn(`[AUTH] No theme configured for initiative: ${user.initiative}`);
+      }
+
+      // Build comprehensive profile response
+      const profile = {
+        // User identity from Entra ID
+        user: {
+          id: user.sub,
+          email: user.email,
+          name: user.name,
+          azureId: user.azureId,
+        },
+        
+        // Initiative assignment from Entra ID groups
+        initiative: {
+          id: user.initiative,
+          name: user.initiativeName || initiativeMappingService.getInitiativeDisplayName(user.initiative),
+          displayName: initiativeMappingService.getInitiativeDisplayName(user.initiative),
+        },
+        
+        // Organization data from D365 (optional)
+        organization: user.organization || null,
+        
+        // Theme configuration for dynamic UI
+        theme: theme ? {
+          primaryColor: theme.primaryColor,
+          secondaryColor: theme.secondaryColor,
+          logo: theme.logo,
+          favicon: theme.favicon,
+          name: theme.name,
+        } : null,
+        
+        // Access control from Entra ID
+        roles: user.roles || [],
+        groups: user.groups || [],
+        permissions: user.permissions || [],
+        
+        // Additional metadata
+        metadata: {
+          tokenIssuedAt: new Date(user.iat * 1000).toISOString(),
+          tokenExpiresAt: new Date(user.exp * 1000).toISOString(),
+        }
+      };
+
+      // Log successful profile fetch for monitoring
+      console.log('[AUTH] Profile fetched successfully:', {
+        userId: user.sub,
+        email: user.email,
+        initiative: user.initiative,
+        hasOrganization: !!user.organization,
+        hasTheme: !!theme,
+        roleCount: user.roles?.length || 0,
+        groupCount: user.groups?.length || 0,
+      });
+
+      res.json(profile);
+    } catch (error) {
+      console.error('[AUTH] Profile fetch error:', error);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to get user profile', 500);
     }
   }
 

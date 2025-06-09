@@ -34,7 +34,7 @@ describe('D365Service', () => {
   });
 
   describe('getUserOrganization', () => {
-    const mockEmail = 'test@example.com';
+    const mockAzureObjectId = '12345678-1234-1234-1234-123456789012';
     const mockD365Token = 'mock-d365-token';
 
     it('should return undefined in stub mode (no D365_URL)', async () => {
@@ -42,7 +42,7 @@ describe('D365Service', () => {
       config.D365_URL = '';
 
       // Act
-      const result = await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      const result = await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(result).toBeUndefined();
@@ -57,7 +57,8 @@ describe('D365Service', () => {
         contactid: 'contact-123',
         firstname: 'Test',
         lastname: 'User',
-        emailaddress1: mockEmail,
+        emailaddress1: 'test@example.com',
+        msevtmgt_aadobjectid: mockAzureObjectId,
         _parentcustomerid_value: 'account-456'
       };
 
@@ -82,7 +83,7 @@ describe('D365Service', () => {
       } as Response);
 
       // Act
-      const result = await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      const result = await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(result).toEqual({
@@ -98,10 +99,10 @@ describe('D365Service', () => {
       
       expect(fetch).toHaveBeenCalledTimes(2);
       
-      // Verify contact query - note: we're using OData escaping, not URL encoding
+      // Verify contact query - using Azure AD Object ID
       expect(fetch).toHaveBeenNthCalledWith(
         1,
-        expect.stringContaining(`/contacts?$filter=emailaddress1 eq '${mockEmail}'`),
+        expect.stringContaining(`/contacts?$filter=msevtmgt_aadobjectid eq '${mockAzureObjectId}'`),
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -133,7 +134,7 @@ describe('D365Service', () => {
       } as Response);
 
       // Act
-      const result = await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      const result = await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(result).toBeUndefined();
@@ -148,7 +149,8 @@ describe('D365Service', () => {
         contactid: 'contact-123',
         firstname: 'Test',
         lastname: 'User',
-        emailaddress1: mockEmail,
+        emailaddress1: 'test@example.com',
+        msevtmgt_aadobjectid: mockAzureObjectId,
         _parentcustomerid_value: null
       };
 
@@ -158,7 +160,7 @@ describe('D365Service', () => {
       } as Response);
 
       // Act
-      const result = await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      const result = await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(result).toBeUndefined();
@@ -171,7 +173,8 @@ describe('D365Service', () => {
       
       const mockContact = {
         contactid: 'contact-123',
-        emailaddress1: mockEmail,
+        emailaddress1: 'test@example.com',
+        msevtmgt_aadobjectid: mockAzureObjectId,
         _parentcustomerid_value: 'account-456'
       };
 
@@ -187,7 +190,7 @@ describe('D365Service', () => {
       } as Response);
 
       // Act
-      const result = await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      const result = await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(result).toBeUndefined();
@@ -205,7 +208,7 @@ describe('D365Service', () => {
       } as Response);
 
       // Act
-      const result = await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      const result = await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(result).toBeUndefined();
@@ -219,32 +222,13 @@ describe('D365Service', () => {
       vi.mocked(fetch).mockRejectedValueOnce(new Error('Network error'));
 
       // Act
-      const result = await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      const result = await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(result).toBeUndefined();
       expect(fetch).toHaveBeenCalledTimes(1);
     });
 
-    it('should properly escape emails with special characters', async () => {
-      // Arrange
-      config.D365_URL = 'https://test.crm.dynamics.com';
-      const emailWithQuote = "test.o'connor@example.com";
-      
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ value: [] })
-      } as Response);
-
-      // Act
-      await d365Service.getUserOrganization(emailWithQuote, mockD365Token);
-
-      // Assert
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("emailaddress1 eq 'test.o''connor@example.com'"),
-        expect.any(Object)
-      );
-    });
 
     it('should use correct OData headers and API version', async () => {
       // Arrange
@@ -256,7 +240,7 @@ describe('D365Service', () => {
       } as Response);
 
       // Act
-      await d365Service.getUserOrganization(mockEmail, mockD365Token);
+      await d365Service.getUserOrganization(mockAzureObjectId, mockD365Token);
 
       // Assert
       expect(fetch).toHaveBeenCalledWith(

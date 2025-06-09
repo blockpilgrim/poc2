@@ -207,18 +207,18 @@ export class D365Service {
    * This is the primary method for fetching business data from D365.
    * Organization data is OPTIONAL - auth should not fail if this returns undefined.
    * 
-   * @param email User's email address
+   * @param azureObjectId User's Azure AD Object ID
    * @param d365Token D365 access token
    * @returns Organization data or undefined if not found/error
    */
   async getUserOrganization(
-    email: string,
+    azureObjectId: string,
     d365Token: string
   ): Promise<OrganizationData | undefined> {
     try {
       // Validate inputs
-      if (!email || typeof email !== 'string') {
-        console.warn('[D365] Invalid email parameter provided');
+      if (!azureObjectId || typeof azureObjectId !== 'string') {
+        console.warn('[D365] Invalid Azure Object ID parameter provided');
         return undefined;
       }
       
@@ -227,7 +227,7 @@ export class D365Service {
         return undefined;
       }
       
-      console.log(`[D365] Fetching organization data for: ${email}`);
+      console.log(`[D365] Fetching organization data for Azure ID: ${azureObjectId}`);
       
       // STUB MODE - Return undefined to simulate optional org data
       if (!config.D365_URL) {
@@ -236,10 +236,10 @@ export class D365Service {
       }
       
       // PRODUCTION IMPLEMENTATION
-      // Step 1: Query Contact by email address
-      const contact = await this.queryContactByEmail(email, d365Token);
+      // Step 1: Query Contact by Azure AD Object ID
+      const contact = await this.queryContactByAzureId(azureObjectId, d365Token);
       if (!contact) {
-        console.log(`[D365] No contact found for email: ${email}`);
+        console.log(`[D365] No contact found for Azure ID: ${azureObjectId}`);
         return undefined;
       }
       
@@ -281,15 +281,15 @@ export class D365Service {
    */
 
   /**
-   * Query Contact by email address
+   * Query Contact by Azure AD Object ID
    * Used to find the user's Contact record and related organization
    * 
-   * @param email User's email address
+   * @param azureObjectId User's Azure AD Object ID
    * @param d365Token D365 access token
    * @returns Contact record or null if not found
    */
-  private async queryContactByEmail(
-    email: string, 
+  private async queryContactByAzureId(
+    azureObjectId: string, 
     d365Token: string
   ): Promise<any | null> {
     if (!config.D365_URL) {
@@ -298,10 +298,9 @@ export class D365Service {
     }
 
     try {
-      // Properly escape email for OData query - single quotes must be doubled
-      const escapedEmail = email.replace(/'/g, "''");
+      // Azure Object IDs don't need escaping like emails do
       const url = `${config.D365_URL}/api/data/${this.apiVersion}/contacts`;
-      const query = `?$filter=emailaddress1 eq '${escapedEmail}'&$select=contactid,firstname,lastname,emailaddress1,_parentcustomerid_value&$top=1`;
+      const query = `?$filter=msevtmgt_aadobjectid eq '${azureObjectId}'&$select=contactid,firstname,lastname,emailaddress1,msevtmgt_aadobjectid,_parentcustomerid_value&$top=1`;
       
       const response = await fetch(url + query, {
         method: 'GET',
@@ -320,7 +319,7 @@ export class D365Service {
       const data = await response.json() as { value: any[] };
       return data.value && data.value.length > 0 ? data.value[0] : null;
     } catch (error) {
-      console.error('[D365] Error querying contact:', error);
+      console.error('[D365] Error querying contact by Azure ID:', error);
       return null;
     }
   }
