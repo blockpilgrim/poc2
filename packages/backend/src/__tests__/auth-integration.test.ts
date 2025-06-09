@@ -245,7 +245,7 @@ describe('Authentication Integration Tests', () => {
       expect(authService.extractGroupsAndRoles).toHaveBeenCalledWith('mock-id-token');
       expect(initiativeMappingService.extractInitiativeFromGroups).toHaveBeenCalledWith(mockGroups);
       expect(d365Service.getUserOrganization).toHaveBeenCalledWith(
-        'user@example.com',
+        'user-123',  // Now using Azure AD Object ID from claims.oid
         'd365-token'
       );
     });
@@ -708,6 +708,7 @@ describe('Authentication Integration Tests', () => {
 
       vi.mocked(jwtService.verifyAccessToken).mockReturnValue(mockUser);
       vi.mocked(initiativeMappingService.extractInitiativeFromGroups).mockReturnValue('ec-arkansas');
+      vi.mocked(initiativeMappingService.getInitiativeDisplayName).mockReturnValue('Arkansas Partner Portal');
 
       const response = await request(app)
         .get('/api/auth/me')
@@ -719,14 +720,19 @@ describe('Authentication Integration Tests', () => {
           id: 'user-123',
           email: 'user@example.com',
           name: 'Test User',
+          // azureId not included when undefined
           roles: ['FosterPartner'],
           permissions: ['read:leads']
         },
         initiative: {
           id: 'ec-arkansas',
           name: 'Arkansas Partner Portal',
-          code: 'AR'
-        }
+          code: 'AR',
+          displayName: 'Arkansas Partner Portal'
+        },
+        organization: null,  // No org data in JWT
+        groups: ['Partner Portal - EC Arkansas'],
+        theme: expect.any(Object)  // Theme is returned based on initiative
       });
     });
 

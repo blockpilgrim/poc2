@@ -127,7 +127,7 @@ export class AuthController {
             const d365Token = await authService.getD365AccessToken();
             if (d365Token) {
               // Use Azure AD Object ID for reliable contact lookup
-              const azureObjectId = authResult.account.homeAccountId;
+              const azureObjectId = claims.oid;
               organization = await d365Service.getUserOrganization(
                 azureObjectId,
                 d365Token
