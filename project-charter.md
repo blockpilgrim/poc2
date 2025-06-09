@@ -170,33 +170,39 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Implement JWT generation for API access (refactored for groups/roles)
 - [x] **CRITICAL**: Include Entra ID groups in JWT claims
 - [x] **CRITICAL**: Include Entra ID app roles in JWT claims
-- [ ] **CRITICAL**: Test complete end-to-end authentication flow with Entra ID groups/roles
+- [ ] **CRITICAL**: Test complete end-to-end authentication flow with real Entra ID accounts and D365 data
 - [x] Document Entra ID groups/roles configuration requirements
-- [ ] Implement authentication context/provider (Frontend)
-- [ ] Create login/logout flows with MSAL redirect (Frontend)
-- [x] Implement token management and refresh (updated for new claims)
+- [x] Implement authentication context/provider (Frontend - via authService and authStore)
+- [x] Create login/logout flows with MSAL redirect (Frontend - complete)
+- [x] Implement token management and refresh (Frontend - with interceptors)
 
 #### Basic Initiative Support
 - [x] Define Initiative type and theme contracts
 - [x] **CRITICAL**: Extract initiative from Entra ID group membership
 - [x] **CRITICAL**: Extract roles from Entra ID app role assignments
-- [ ] **CRITICAL**: Implement initiative filter middleware based on groups
+- [ ] **CRITICAL**: Implement initiative filter middleware for D365 queries
 - [x] Refactor existing initiative validation to use Entra ID groups
-- [ ] Update query keys to use group-based initiatives
-- [ ] Store Entra ID groups and derived initiative in auth state
+- [ ] Update frontend query keys to use group-based initiatives
+- [x] Store Entra ID groups and derived initiative in auth state (Frontend - in authStore)
 
-#### Minimal D365 Integration
-- [x] Create D365 service architecture with stub implementation
-- [x] Document production transition plan for real D365 integration
-- [ ] Map D365 field requirements for organization data (Account relationships)
-- [ ] Implement actual D365 Web API queries
-- [ ] Create /api/profile endpoint combining Entra ID identity with D365 org data
+#### D365 Integration (Real Data for POC)
+- [x] Create D365 service architecture with real Web API implementation
+- [x] Configure D365 environment variables (D365_URL, CLIENT_ID, CLIENT_SECRET)
+- [x] Implement D365 authentication flow (client credentials & on-behalf-of)
+- [x] Map user's Entra ID to D365 Contact and Account entities
+- [x] Implement actual D365 Web API queries (Contact & Account retrieval)
+- [ ] **CRITICAL**: Create /api/auth/profile endpoint combining Entra ID identity with D365 org data
+- [ ] **CRITICAL**: Enhance /api/auth/me endpoint to include theme configuration
+- [ ] Verify D365 queries respect initiative boundaries (if applicable)
 
 #### Basic UI Foundation
 - [x] Configure Tailwind CSS (latest stable) and migrate design tokens
 - [x] Port shadcn/ui components from Next.js (Initial setup with key components: Button, Card, Input, Dialog)
-- [x] Set up React Router (latest stable - note: may require v6 to v7 migration) with route structure
-- [ ] Create initiative theme configuration system
+- [x] Set up React Router (latest stable - v7) with route structure
+- [x] Implement protected routes with role-based access control
+- [ ] **CRITICAL**: Create initiative theme configuration system with dynamic CSS variables
+- [ ] **CRITICAL**: Implement ThemeProvider component to apply initiative themes
+- [ ] Create theme assets (logos, favicons) for supported initiatives
 
 ### MVP Stage - Production-Ready Core Features
 
@@ -661,43 +667,65 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - ✅ Microsoft Graph API integration for group name resolution
 - ✅ Working end-to-end authentication flow with real Entra ID groups
 
-**🔧 Minor POC Improvements:**
-* **[ ] Strengthen JWT Configuration for Demo Security**
-  - *Update default JWT secret validation to prevent easy guessing during demos*
-  - *Replace Math.random() with crypto.randomBytes() for CSRF protection*
-
+**🔧 Critical POC Requirements:**
 * **[ ] Create `/api/auth/profile` Endpoint**
-  - *Referenced in architecture notes but not yet implemented*
-  - *Should combine Entra ID identity data with D365 organization data*
+  - *Combine Entra ID identity with D365 organization data (already being retrieved)*
   - *Return user profile, assigned initiative, theme config, and role-based permissions*
+  - *Leverage existing D365 service that already fetches Contact/Account data*
+  - *Include initiative-specific theme configuration based on Entra ID groups*
+
+* **[ ] Implement Initiative-Based Theming System**
+  - *Create theme assets (logos, favicons) for supported initiatives*
+  - *Implement dynamic CSS variable updates based on user's initiative*
+  - *Create ThemeProvider component to apply themes at runtime*
+  - *Ensure theme persists across page refreshes*
+
+* **[ ] Complete Frontend Integration**
+  - *Update auth callback to fetch enhanced profile data*
+  - *Apply theme immediately after successful authentication*
+  - *Handle edge cases (missing initiative, no theme configured)*
+  - *Test with real Entra ID accounts across different initiatives*
 
 **🎯 Next Steps & High-Level Checklist:**
 
-* **[ ] Implement Frontend Authentication Flow**
-  - [ ] Create React authentication context/provider
-  - [ ] Build login/logout components with redirect handling
-  - [ ] Implement protected route guards
-  - [ ] Add token management (storage, refresh, API interceptors)
-  - *Architecture Note: Use existing JWT structure with groups/roles claims. Frontend auth context should call `/api/auth/profile` endpoint for complete user data and initiative mapping. Reference JWT payload structure in project charter Initiative-Based Architecture section.*
-
-* **[ ] Build the Core User Profile Endpoint**
-  - *Architecture Note: This may be partially addressed by the `/api/auth/profile` endpoint above. Combine Entra ID identity data with D365 organization data. Use `findBestInitiativeGroup()` utility in `group-naming.utils.ts` to determine primary initiative from user's groups.*
+* **[ ] Create Enhanced Authentication Endpoints**
+  - [ ] Build `/api/auth/profile` endpoint leveraging existing D365 service
+  - [ ] Update `/api/auth/me` to include theme configuration
+  - [ ] Return complete user context: identity + initiative + organization + theme
+  - *Architecture Note: D365 integration is working - Contact/Account data is already being retrieved. Use `findBestInitiativeGroup()` for initiative and include theme config.*
 
 * **[ ] Implement Initiative-Based Theming**
-  - *Architecture Note: Reference theme configuration structure in project charter Initiative-Based Architecture section. Themes are mapped by initiative ID (not group name) for consistency. The frontend should apply theme based on the initiative derived from the user's primary group.*
+  - [ ] Create theme assets (SVG logos, favicons) for each initiative
+  - [ ] Implement dynamic CSS variable system for runtime theme updates
+  - [ ] Create ThemeProvider component with error boundaries
+  - [ ] Update document title and favicon based on initiative
+  - *Architecture Note: Themes mapped by initiative ID (e.g., 'ec-arkansas'). Static CSS variables exist but need dynamic updates.*
 
-* **[ ] Finalize Development Environment Setup**
-  - *Architecture Note: Ensure environment variables for group naming in `config/index.ts` are properly configured. Test with both production and testing group formats to validate the priority system.*
+* **[ ] Complete Frontend Integration**
+  - [ ] Update auth callback to fetch profile from new endpoint
+  - [ ] Store complete profile (with org data) in auth store
+  - [ ] Apply initiative theme immediately after authentication
+  - [ ] Handle edge cases gracefully (missing initiative, no D365 account)
+  - *Architecture Note: Frontend auth is complete. Focus on integrating profile endpoint and applying themes.*
+
+* **[ ] Validate End-to-End Flow**
+  - [ ] Test with real Entra ID accounts across different security groups
+  - [ ] Verify correct initiative extraction and theme application
+  - [ ] Confirm D365 organization data displays correctly
+  - [ ] Validate role-based UI elements and access control
+  - *Architecture Note: System already extracts real data from both Entra ID and D365. Focus on end-to-end validation.*
 
 **🏗️ Architecture Components Ready for POC:**
 - Group naming utilities at `/packages/backend/src/utils/group-naming.utils.ts`
-- Initiative mapping service with 5-state coverage (sufficient for POC validation)
+- Initiative mapping service with 5-state coverage (Arkansas, Kentucky, Oregon, Tennessee, Virginia)
 - Configurable group patterns via environment variables
 - Backward compatibility support for legacy "EC {State}" groups
 - Priority system: new format > legacy, production > testing, alphabetical order
 - Working Microsoft Graph API integration with fallback mappings
+- Complete frontend authentication infrastructure (auth service, store, protected routes)
+- Token management with automatic refresh and API interceptors
 
-**Current implementation successfully validates the core architectural decisions and is ready for frontend integration to complete the POC demonstration.**
+**Current Status:** Backend authentication is complete with working D365 integration. Frontend auth infrastructure is implemented. D365 OAuth and Web API queries are functional and retrieving real Contact/Account data. Next critical steps are creating the profile endpoint, implementing dynamic theming, and validating the complete end-to-end flow with real accounts.
 
 ---
 
