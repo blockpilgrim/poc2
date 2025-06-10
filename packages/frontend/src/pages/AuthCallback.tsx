@@ -18,7 +18,7 @@ export function AuthCallback() {
         
         navigate(redirectUrl, { replace: true });
       } catch (err) {
-        console.error('Authentication callback failed:', err);
+        console.error('[AuthCallback] Authentication callback failed:', err);
         setError(err instanceof Error ? err.message : 'Authentication failed');
       }
     };

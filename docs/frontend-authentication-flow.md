@@ -9,9 +9,10 @@ The frontend authentication is implemented using a server-side OAuth flow where 
 1. **User clicks login** → Frontend calls `POST /api/auth/login`
 2. **Backend returns Azure AD URL** → Frontend redirects to Microsoft login
 3. **User authenticates** → Azure AD redirects to backend callback
-4. **Backend validates** → Generates JWT tokens and redirects to frontend
+4. **Backend validates** → Generates JWT tokens and redirects to `/auth/callback`
 5. **Frontend extracts tokens** → Stores in sessionStorage and loads user profile
-6. **Authenticated requests** → Include JWT in Authorization header
+6. **Frontend applies theme** → Theme provider applies initiative-specific branding
+7. **Authenticated requests** → Include JWT in Authorization header
 
 ## Key Components
 
@@ -43,6 +44,12 @@ The frontend authentication is implemented using a server-side OAuth flow where 
 - Token expiration checking
 - Automatic token refresh attempts
 - Queue management for concurrent requests during refresh
+
+### Theme Provider (`/src/providers/ThemeProvider.tsx`)
+- Applies initiative-specific branding and colors
+- Dynamically loads theme based on user's initiative
+- Updates favicon and document title
+- Provides theme context to all components
 
 ## Security Features
 
@@ -91,6 +98,7 @@ await logout();
 - **Auth Callback Errors**: Dedicated error page with details
 - **Token Refresh Failures**: Automatic redirect to login
 - **Network Errors**: User-friendly error messages
+- **Redirect URL Handling**: Backend ensures proper redirect to `/auth/callback` even if user navigates directly to a protected route
 
 ## Testing the Flow
 
@@ -106,5 +114,5 @@ await logout();
 
 - Implement token refresh endpoint in backend
 - Add multi-tab synchronization
-- Implement initiative-based theming
 - Add comprehensive E2E tests
+- Enhance theme customization options

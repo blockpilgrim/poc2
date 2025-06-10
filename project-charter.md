@@ -652,116 +652,159 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** POC Stage - Frontend Integration & Core Features
+**Phase:** POC Stage Completion → MVP Stage Core Features
 
-**Status:** Initiative-based theming is **complete and functional**. The frontend now dynamically applies themes based on user's Entra ID group membership, with proper CSS variable updates, logo display, and theme persistence. The authentication flow is fully integrated with the enhanced backend endpoints, successfully retrieving and applying user profile data including organization details and theme configuration.
+**Status:** Authentication and initiative-based theming are complete and production-ready. Users can successfully log in with Entra ID, and the app dynamically applies state-specific themes based on security group membership.
 
-**✅ Completed Authentication Infrastructure:**
-- ✅ MSAL Node integration with Entra ID groups and app roles
-- ✅ JWT token generation with group-based initiative extraction
-- ✅ Group naming utility functions with backward compatibility
-- ✅ Initiative mapping service supporting both naming conventions
-- ✅ Token validation middleware with comprehensive claims processing
-- ✅ Environment-based configuration for group patterns
-- ✅ Comprehensive test coverage (33 test cases) for authentication logic
-- ✅ Microsoft Graph API integration for group name resolution
-- ✅ Working end-to-end authentication flow with real Entra ID groups
-- ✅ Enhanced authentication endpoints (`/api/auth/profile`, `/api/auth/me`)
-- ✅ D365 integration using Azure AD Object ID for reliable user matching
+**✅ What's Working:**
+- Full authentication flow with Entra ID groups and roles
+- Initiative-based theming (logos, colors, titles) based on user's state
+- User profile integration with D365 organization data
+- Auth state management with Zustand
+- Protected routes and navigation
 
-**✅ Recently Completed:**
-* **[x] Implemented Initiative-Based Theming System**
-  - *Created ThemeProvider component that wraps the entire app*
-  - *Applies CSS variables dynamically based on user's initiative*
-  - *Updates document title and favicon per initiative*
-  - *Created SVG logos and placeholder favicons for all 5 supported states*
-  - *Implemented user-scoped theme persistence in localStorage*
-  - *Added comprehensive error handling and validation*
-  - *Navigation bar now displays initiative logo and uses theme colors*
+**⚠️ Critical POC Gap:**
+- **Initiative filter middleware for D365 queries** - This CRITICAL security feature is not yet implemented. Without it, D365 queries won't automatically filter by initiative, creating risk of cross-initiative data exposure.
 
-* **[x] Enhanced Auth Store for Complete User Context**
-  - *Extended authStore to include theme, organization, and initiative display data*
-  - *Added `setProfileData` method for unified profile updates*
-  - *Auth service now uses enhanced `/api/auth/me` endpoint*
-  - *Proper TypeScript types exported for frontend usage*
+**✅ Important Clarification:**
+- Initiative assignment is already working correctly via Entra ID security groups (not D365)
+- The D365 service has production-ready code but is primarily needed for lead data queries
+- Authentication and initiative-based theming are fully functional with real Entra ID data
 
-**🔧 Remaining POC Requirements:**
-* **[ ] Complete D365 Lead Management Features**
-  - *Create lead listing page with TanStack Table*
-  - *Implement lead detail view*
-  - *Add filtering and search capabilities*
-  - *Ensure all D365 queries include initiative filtering*
+**🎯 Immediate Next Steps:**
 
-* **[ ] Implement Role-Based UI Elements**
-  - *Display/hide features based on Entra ID app roles*
-  - *Create admin-only sections*
-  - *Implement organization-scoped vs network-wide data access*
-  - *Add permission checks to protected routes*
+### 1. Complete POC Stage (1-2 days)
+**CRITICAL: Implement D365 Initiative Filter Middleware**
 
-**🎯 Next Immediate Actions:**
+Since initiative data comes from Entra ID (not D365), the middleware needs to ensure all D365 lead queries are filtered by the user's initiative:
 
-* **[ ] Test Complete Authentication & Theming Flow**
-  - [ ] Test with real Entra ID accounts from different initiatives
-  - [ ] Verify theme switches correctly when different users log in
-  - [ ] Validate theme persistence across page refreshes
-  - [ ] Test edge cases (no initiative, multiple groups, invalid theme data)
+1. **Extend Auth Middleware** (`auth.middleware.ts`):
+   - Modify `enforceInitiative` to inject `req.d365Filter` with initiative constraints
+   - Ensure this filter is available to all protected endpoints
 
-* **[ ] Begin Core Lead Management Features**
-  - [ ] Create D365 lead service endpoints in backend
-  - [ ] Implement lead listing API with pagination
-  - [ ] Add initiative-based filtering to all D365 queries
-  - [ ] Create frontend lead management pages
-  - *Architecture Note: D365 service foundation exists. Need to extend for lead-specific queries.*
+2. **Enhance D365 Service** (`d365.service.ts`):
+   - Add a `buildODataFilter()` method to construct secure OData queries
+   - Create base methods that accept and enforce initiative filters
+   - Add lead-specific query methods (getLeads, getLeadById, updateLead)
 
-**🏗️ Architecture Components Completed:**
-- ✅ Initiative-based theming system with ThemeProvider
-- ✅ Dynamic CSS variable application based on user's initiative
-- ✅ Theme persistence per user with localStorage
-- ✅ Enhanced auth store with theme and organization data
-- ✅ Complete authentication flow from login to theme application
-- ✅ Error handling and validation for theme data
-- ✅ SVG logos and placeholder favicons for all 5 states
-- ✅ Navigation bar theming with logo display
-- ✅ Tailwind configuration for dynamic theme colors
-- ✅ Group naming utilities with backward compatibility
-- ✅ Initiative mapping service with 5-state coverage
-- ✅ Microsoft Graph API integration for group resolution
-- ✅ D365 service with Azure AD Object ID mapping
+3. **Security Validation**:
+   - Log all D365 queries with initiative filters for audit trail
+   - Add tests to verify cross-initiative queries are blocked
+   - Ensure filter injection cannot be bypassed
 
-**📋 Key Technical Context for Next Steps:**
-- **Theme Implementation Details**:
-  - CSS variables: `--primary-hex`, `--secondary-hex` for Tailwind integration
-  - Theme cached by user ID to prevent cross-user contamination
-  - Hex color validation ensures only valid colors are applied
-  - ThemeProvider handles all edge cases gracefully
-- **Auth Store Structure**:
-  - `user`: Basic user info (id, email, name, azureId)
-  - `theme`: Theme object with colors, logo, favicon, name
-  - `organization`: D365 org data (id, name, type)
-  - `initiative`: Initiative ID and display names
-  - `setProfileData()`: Unified method for updating all profile data
-- **Testing Requirements**:
-  - Need real Entra ID accounts in different security groups
-  - Verify theme switching between users
-  - Test persistence across browser sessions
+**Example Implementation:**
+```typescript
+// In auth.middleware.ts - extend enforceInitiative
+export const enforceInitiative = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  // ... existing validation ...
+  
+  // Inject D365 filter for all queries
+  req.d365Filter = {
+    initiative: req.user.initiative,
+    organizationId: req.user.organization?.id,
+    // Additional filters can be added by specific endpoints
+  };
+  
+  // Log for security audit
+  logger.info('D365 query filter applied', {
+    userId: req.user.sub,
+    initiative: req.user.initiative,
+    endpoint: req.path
+  });
+  
+  next();
+};
 
-**🔍 Testing Initiative-Based Theming:**
-1. Run backend: `cd packages/backend && npm run dev`
-2. Run frontend: `cd packages/frontend && npm run dev`
-3. Navigate to http://localhost:5173 and click login
-4. Login with an Entra ID account assigned to a supported security group
-5. Verify:
-   - Navigation bar shows initiative's primary color
-   - Initiative logo appears in nav bar
-   - Browser tab title shows "{State} Partner Portal"
-   - Theme persists on page refresh
-   - Logout resets to default theme
+// In d365.service.ts - add secure query builder
+private buildSecureODataFilter(
+  baseFilter: string, 
+  initiativeFilter: D365Filter
+): string {
+  const filters = [];
+  
+  // ALWAYS include initiative filter (non-negotiable)
+  if (initiativeFilter.initiative) {
+    filters.push(`msevtmgt_initiative eq '${initiativeFilter.initiative}'`);
+  }
+  
+  // Add user's additional filters
+  if (baseFilter) {
+    filters.push(`(${baseFilter})`);
+  }
+  
+  return filters.join(' and ');
+}
 
-**📚 Documentation:**
-- Initiative theming guide: `/docs/initiative-based-theming.md`
-- Includes testing instructions and troubleshooting
+// Example lead query method
+async getLeads(filter: D365Filter, options: QueryOptions) {
+  const oDataFilter = this.buildSecureODataFilter(
+    options.userFilter || '', 
+    filter
+  );
+  
+  // Query D365 with enforced initiative filter
+  const response = await this.queryD365('leads', {
+    $filter: oDataFilter,
+    $top: options.limit,
+    $skip: options.offset
+  });
+  
+  return response;
+}
+```
 
-**Current Status:** Initiative-based theming is complete and functional. The frontend successfully applies dynamic themes based on user's Entra ID group membership. All POC requirements for theming are met. Ready to proceed with core lead management features and role-based UI elements.
+### 2. D365 Lead Management (MVP Stage - 3-5 days)
+Once the initiative filter middleware is complete, implement the core lead management functionality:
+
+**Backend - Create Lead Endpoints** (`/packages/backend/src/controllers/leads.controller.ts`)
+- `GET /api/v1/leads` - List leads with pagination, filtering, sorting
+- `GET /api/v1/leads/:id` - Get single lead details
+- `PATCH /api/v1/leads/:id` - Update lead status/notes
+- Apply `enforceInitiative` middleware to all endpoints
+- Use D365 service with automatic initiative filtering
+
+**Frontend - Lead List Page** (`/packages/frontend/src/pages/Leads.tsx`)
+- Use TanStack Table (already installed)
+- Implement filters: status, date range, assigned to
+- Add search by name/email
+- Column sorting and pagination
+- Click row to view details
+
+**Frontend - Lead Details Page** (`/packages/frontend/src/pages/LeadDetails.tsx`)
+- Display all lead information
+- Show activity history
+- Allow status updates
+- Add notes functionality
+
+**Key Technical Context:**
+- D365 service exists at `/packages/backend/src/services/d365.service.ts`
+- Use `msevtmgt_` prefix for D365 custom fields
+- Initiative filtering will be automatically applied via middleware
+- Frontend should use TanStack Query for data fetching
+- Auth store has user's `initiative` and `organization` for context
+
+**Testing the Implementation:**
+1. Verify initiative filter middleware is working (check logs for filter injection)
+2. Ensure backend and frontend dev servers are running
+3. Log in with a test account that has leads in D365
+4. Navigate to `/leads` to see the list
+5. Verify users only see their state's leads (critical security check)
+6. Test with different state accounts to ensure data isolation
+
+### 3. Parallel MVP Work (Optional)
+While building lead management, these MVP items can be started in parallel:
+- Create `useUIStore` and `useFilterStore` for better state management
+- Configure TanStack Query with auth interceptors (note: basic setup already exists)
+- Add security middleware (CORS, Helmet.js) if time permits
+
+**📊 Realistic Timeline Assessment:**
+Based on the current codebase analysis:
+- D365 filter middleware: 1-2 days (security critical, needs careful implementation)
+- Lead management backend: 2-3 days (building from scratch, no existing lead code)
+- Lead management frontend: 2-3 days (UI components exist, but pages need creation)
+- **Total: 5-8 days** for complete, production-ready lead management with security
+
+**Note:** The initial 3-5 day estimate assumed more existing infrastructure. The actual implementation needs to build the D365 lead query methods from scratch while ensuring strict security boundaries.
 
 ---
 

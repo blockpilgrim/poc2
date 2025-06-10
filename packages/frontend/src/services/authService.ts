@@ -94,6 +94,7 @@ class AuthService {
       
       // Use the new setProfileData method to store all profile data including theme
       authStore.setProfileData(response.data);
+      
     } catch (error) {
       console.error('Failed to load user profile:', error);
       throw new Error('Failed to load user profile');

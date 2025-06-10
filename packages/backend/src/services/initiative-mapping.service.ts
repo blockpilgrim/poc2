@@ -104,14 +104,20 @@ export class InitiativeMappingService {
    * @throws AppError if no valid initiative group is found
    */
   extractInitiativeFromGroups(groups: string[]): string {
+    
     if (!groups || groups.length === 0) {
       throw new AppError('No groups provided', 400);
     }
 
     // Find the best matching initiative group using new utility
     const initiativeGroup = findBestInitiativeGroup(groups);
+    
 
     if (!initiativeGroup || !this.initiativeMappings.has(initiativeGroup)) {
+      console.error('[INITIATIVE-MAPPING] No valid initiative group found:', {
+        groups,
+        availableMappings: Array.from(this.initiativeMappings.keys())
+      });
       throw new AppError(
         'User is not assigned to any initiative group. Please contact your administrator.',
         403
@@ -119,6 +125,7 @@ export class InitiativeMappingService {
     }
 
     const mapping = this.initiativeMappings.get(initiativeGroup)!;
+    
     return mapping.initiativeId;
   }
 
@@ -133,7 +140,10 @@ export class InitiativeMappingService {
    * Get theme configuration for an initiative
    */
   getThemeForInitiative(initiativeId: string): ThemeConfig | undefined {
-    return this.initiativeThemes.get(initiativeId);
+    const theme = this.initiativeThemes.get(initiativeId);
+    
+    
+    return theme;
   }
 
   /**

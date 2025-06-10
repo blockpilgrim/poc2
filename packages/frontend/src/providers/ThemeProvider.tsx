@@ -7,6 +7,14 @@ let lastAppliedTheme: string | null = null;
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, theme, user } = useAuthStore();
 
+  // Component mount/unmount effect
+  useEffect(() => {
+    return () => {
+      // Reset the cache when provider unmounts (e.g., during hot reload)
+      lastAppliedTheme = null;
+    };
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated || !theme) {
       // Reset to default theme when not authenticated or no theme
@@ -17,19 +25,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // Only apply theme if it's different from the last applied one
     const themeKey = `${user?.id}-${theme.name}`;
+
     if (themeKey !== lastAppliedTheme) {
       applyThemeToDOM(theme);
       lastAppliedTheme = themeKey;
     }
   }, [isAuthenticated, theme, user?.id]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Reset the cache when provider unmounts (e.g., during hot reload)
-      lastAppliedTheme = null;
-    };
-  }, []);
 
   return <>{children}</>;
 }
@@ -41,23 +42,29 @@ function applyThemeToDOM(theme: Theme) {
   try {
     // Validate theme object
     if (!theme || typeof theme !== 'object') {
-      console.error('Invalid theme object');
+      // Invalid theme object, exit early
       return;
     }
 
     const root = document.documentElement;
 
     // Update CSS variables
-    if (theme.primaryColor && isValidHexColor(theme.primaryColor)) {
-      root.style.setProperty('--primary-color', theme.primaryColor);
-      // For POC, use hex colors directly with shadcn/ui
-      // The design system can handle hex colors via Tailwind's opacity modifiers
-      root.style.setProperty('--primary-hex', theme.primaryColor);
+    if (theme.primaryColor) {
+      const isValid = isValidHexColor(theme.primaryColor);
+      
+      if (isValid) {
+        root.style.setProperty('--primary-color', theme.primaryColor);
+        root.style.setProperty('--primary-hex', theme.primaryColor);
+      }
     }
 
-    if (theme.secondaryColor && isValidHexColor(theme.secondaryColor)) {
-      root.style.setProperty('--secondary-color', theme.secondaryColor);
-      root.style.setProperty('--secondary-hex', theme.secondaryColor);
+    if (theme.secondaryColor) {
+      const isValid = isValidHexColor(theme.secondaryColor);
+      
+      if (isValid) {
+        root.style.setProperty('--secondary-color', theme.secondaryColor);
+        root.style.setProperty('--secondary-hex', theme.secondaryColor);
+      }
     }
 
     // Update document title
@@ -73,10 +80,14 @@ function applyThemeToDOM(theme: Theme) {
     // Store user-specific theme in localStorage
     const user = useAuthStore.getState().user;
     if (user?.id) {
-      localStorage.setItem(`portal-theme-${user.id}`, JSON.stringify(theme));
+      const storageKey = `portal-theme-${user.id}`;
+      localStorage.setItem(storageKey, JSON.stringify(theme));
     }
   } catch (error) {
-    console.error('Error applying theme:', error);
+    // Error applying theme - fail silently in production
+    if (import.meta.env.DEV) {
+      console.error('[ThemeProvider] Error applying theme:', error);
+    }
   }
 }
 
@@ -102,13 +113,17 @@ function resetToDefaultTheme() {
     // Clear all user-specific themes from localStorage
     const user = useAuthStore.getState().user;
     if (user?.id) {
-      localStorage.removeItem(`portal-theme-${user.id}`);
+      const storageKey = `portal-theme-${user.id}`;
+      localStorage.removeItem(storageKey);
     }
     
     // Also clear any legacy theme storage
     localStorage.removeItem('portal-theme');
   } catch (error) {
-    console.error('Error resetting theme:', error);
+    // Error resetting theme - fail silently in production
+    if (import.meta.env.DEV) {
+      console.error('[ThemeProvider] Error resetting theme:', error);
+    }
   }
 }
 
@@ -129,7 +144,10 @@ function updateFavicon(faviconUrl: string) {
     // Update href to new favicon
     link.href = faviconUrl;
   } catch (error) {
-    console.error('Error updating favicon:', error);
+    // Error updating favicon - fail silently in production
+    if (import.meta.env.DEV) {
+      console.error('[ThemeProvider] Error updating favicon:', error);
+    }
   }
 }
 

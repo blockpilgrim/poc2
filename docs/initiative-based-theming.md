@@ -11,6 +11,7 @@ The Partner Portal dynamically applies visual themes based on a user's assigned 
 2. Backend extracts initiative from Entra ID groups (e.g., "Partner Portal - EC Oregon")
 3. Initiative is mapped to theme configuration (colors, logo, favicon, name)
 4. Theme data is returned in `/api/auth/me` endpoint response
+5. After successful authentication, frontend redirects to dashboard via `/auth/callback`
 
 ### 2. Theme Application
 1. `ThemeProvider` component wraps the entire app
@@ -73,13 +74,14 @@ The Partner Portal dynamically applies visual themes based on a user's assigned 
 
 3. **Login with a test account:**
    - Navigate to http://localhost:5173
-   - Click "Login"
+   - Click "Login" 
    - Use an Entra ID account assigned to one of these groups:
      - "Partner Portal - EC Oregon"
      - "Partner Portal - EC Arkansas"
      - "Partner Portal - EC Tennessee"
      - "Partner Portal - EC Kentucky"
      - "Partner Portal - EC Oklahoma"
+   - After successful authentication, you'll be redirected to the dashboard
 
 4. **Verify theme application:**
    - ✓ Navigation bar background matches initiative's primary color
@@ -106,15 +108,7 @@ The Partner Portal dynamically applies visual themes based on a user's assigned 
 
 ### Backend Verification
 
-Check the backend logs for:
-```
-[AUTH] Profile fetched successfully: {
-  userId: "...",
-  email: "test@example.com",
-  initiative: "ec-oregon",
-  hasTheme: true
-}
-```
+The backend processes authentication and initiative extraction through the `/api/auth/me` endpoint. User initiative is determined from their Entra ID security group membership.
 
 ### API Response Example
 
@@ -144,10 +138,10 @@ Check the backend logs for:
 ## Troubleshooting
 
 ### Theme not applying?
-1. Check browser console for errors
-2. Verify `/api/auth/me` returns theme data
-3. Ensure user's Entra ID group matches supported initiatives
-4. Check Network tab for 404s on logo/favicon assets
+1. Verify `/api/auth/me` returns theme data
+2. Ensure user's Entra ID group matches supported initiatives
+3. Check Network tab for 404s on logo/favicon assets
+4. Verify authentication redirects properly through `/auth/callback`
 
 ### Wrong theme showing?
 1. Clear localStorage: `localStorage.clear()`

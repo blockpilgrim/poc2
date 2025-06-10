@@ -101,12 +101,6 @@ export class AuthController {
           initiative = initiativeMappingService.extractInitiativeFromGroups(groupNames);
           initiativeName = initiativeMappingService.getInitiativeDisplayName(initiative);
           
-          console.log('[AUTH] User authenticated successfully:', {
-            email: authResult.account?.username,
-            initiative,
-            initiativeName,
-            groupCount: groupNames.length
-          });
         } catch (error) {
           console.error('[AUTH] Initiative extraction failed:', {
             error: error instanceof Error ? error.message : error,
@@ -133,13 +127,6 @@ export class AuthController {
                 d365Token
               );
               
-              // Log successful org data fetch
-              console.log('[AUTH] Organization data fetched:', {
-                userId: azureObjectId,
-                email: authResult.account.username,
-                orgId: organization?.id,
-                orgName: organization?.name
-              });
             }
           } catch (error) {
             // Log the error with context for troubleshooting
@@ -203,11 +190,15 @@ export class AuthController {
       );
 
       // Prepare redirect URL with tokens
-      const frontendRedirect = new URL(
-        session.redirectUrl || config.FRONTEND_URL
-      );
+      const baseUrl = session.redirectUrl || config.FRONTEND_URL;
+      const callbackUrl = baseUrl.endsWith('/auth/callback') 
+        ? baseUrl 
+        : `${config.FRONTEND_URL}/auth/callback`;
+      
+      const frontendRedirect = new URL(callbackUrl);
       frontendRedirect.searchParams.set('token', accessToken);
       frontendRedirect.searchParams.set('refresh', refreshToken);
+
 
       res.redirect(frontendRedirect.toString());
     } catch (error) {
@@ -332,6 +323,7 @@ export class AuthController {
 
       // Get theme configuration for the user's initiative
       const theme = initiativeMappingService.getThemeForInitiative(user.initiative);
+      
 
       // Return enhanced user info including initiative, theme, and organization
       res.json({
@@ -378,8 +370,10 @@ export class AuthController {
 
       // Get theme configuration for the user's initiative
       const theme = initiativeMappingService.getThemeForInitiative(user.initiative);
+      
+      
       if (!theme) {
-        console.warn(`[AUTH] No theme configured for initiative: ${user.initiative}`);
+        console.warn(`[AUTH /profile] No theme configured for initiative: ${user.initiative}`);
       }
 
       // Build comprehensive profile response
@@ -423,16 +417,6 @@ export class AuthController {
         }
       };
 
-      // Log successful profile fetch for monitoring
-      console.log('[AUTH] Profile fetched successfully:', {
-        userId: user.sub,
-        email: user.email,
-        initiative: user.initiative,
-        hasOrganization: !!user.organization,
-        hasTheme: !!theme,
-        roleCount: user.roles?.length || 0,
-        groupCount: user.groups?.length || 0,
-      });
 
       res.json(profile);
     } catch (error) {
