@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
+import leadRoutes from './lead.routes';
 
 const router = Router();
 
 // Mount route modules
 router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);
+router.use('/v1/leads', leadRoutes); // Versioned API endpoint
 
 // API info endpoint
 router.get('/', (_req, res) => {
@@ -26,7 +28,12 @@ router.get('/', (_req, res) => {
         config: 'GET /api/auth/config'
       },
       profile: '/api/profile (coming soon)',
-      leads: '/api/leads (coming soon)'
+      leads: {
+        list: 'GET /api/v1/leads',
+        get: 'GET /api/v1/leads/:id',
+        update: 'PATCH /api/v1/leads/:id',
+        stats: 'GET /api/v1/leads/stats'
+      }
     }
   });
 });

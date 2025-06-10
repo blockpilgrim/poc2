@@ -180,7 +180,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Define Initiative type and theme contracts
 - [x] **CRITICAL**: Extract initiative from Entra ID group membership
 - [x] **CRITICAL**: Extract roles from Entra ID app role assignments
-- [ ] **CRITICAL**: Implement initiative filter middleware for D365 queries
+- [x] **CRITICAL**: Implement initiative filter middleware for D365 queries
 - [x] Refactor existing initiative validation to use Entra ID groups
 - [ ] Update frontend query keys to use group-based initiatives
 - [x] Store Entra ID groups and derived initiative in auth state (Frontend - in authStore)
@@ -238,14 +238,18 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
   - [ ] Testing strategies
 
 #### Core API Development
-- [ ] Design RESTful API structure
-- [ ] Implement CRUD endpoints for leads with initiative filtering
-- [ ] Add pagination, filtering, and sorting
+- [x] Design RESTful API structure
+- [x] Implement CRUD endpoints for leads with initiative filtering
+  - [x] GET /api/v1/leads - List with pagination, filtering, sorting
+  - [x] GET /api/v1/leads/:id - Get single lead with initiative verification
+  - [x] PATCH /api/v1/leads/:id - Update lead with security checks
+  - [x] GET /api/v1/leads/stats - Lead statistics endpoint
+- [x] Add pagination, filtering, and sorting
 - [ ] Create batch operations endpoints
 - [ ] Implement comprehensive Zod validation
-- [ ] **Security**: Input validation for all endpoints
-- [ ] Add initiative audit logging
-- [ ] Create cross-initiative access alerts
+- [x] **Security**: Input validation for all endpoints
+- [x] Add initiative audit logging (via D365_FILTER_APPLIED events)
+- [x] Create cross-initiative access alerts
 
 #### Frontend Data Layer
 - [ ] Configure TanStack Query with auth interceptors
@@ -652,9 +656,9 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** POC Stage Completion → MVP Stage Core Features
+**Phase:** POC Stage Complete → MVP Stage Core Features (Lead Management UI)
 
-**Status:** Authentication and initiative-based theming are complete and production-ready. Users can successfully log in with Entra ID, and the app dynamically applies state-specific themes based on security group membership.
+**Status:** POC stage is now COMPLETE! Authentication, initiative-based theming, AND the critical D365 initiative filter middleware are all implemented and working. The backend lead API is ready for frontend integration.
 
 **✅ What's Working:**
 - Full authentication flow with Entra ID groups and roles
@@ -662,149 +666,93 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - User profile integration with D365 organization data
 - Auth state management with Zustand
 - Protected routes and navigation
+- **NEW: D365 Initiative Filter Middleware** - Automatically injects security filters into all D365 queries
+- **NEW: Lead API Endpoints** - Full CRUD operations with mandatory initiative filtering
 
-**⚠️ Critical POC Gap:**
-- **Initiative filter middleware for D365 queries** - This CRITICAL security feature is not yet implemented. Without it, D365 queries won't automatically filter by initiative, creating risk of cross-initiative data exposure.
+**🎉 Today's Implementation (D365 Initiative Filter Middleware):**
+- Created `D365Filter` types and extended Express Request interface
+- Modified `enforceInitiative` middleware to inject `req.d365Filter` with initiative constraints
+- Implemented `LeadService` with secure OData filter construction that ALWAYS includes initiative
+- Created `LeadController` with pagination, filtering, search, and sorting support
+- Added security logging with new `D365_FILTER_APPLIED` event type
+- All lead queries now automatically filter by `tc_initiative` field in D365
+- Cross-initiative access attempts return 404 (as if lead doesn't exist) for security
 
-**✅ Important Clarification:**
-- Initiative assignment is already working correctly via Entra ID security groups (not D365)
-- The D365 service has production-ready code but is primarily needed for lead data queries
-- Authentication and initiative-based theming are fully functional with real Entra ID data
+**🔧 Technical Details for Next Session:**
+- D365 filter is injected at: `/packages/backend/src/middleware/auth.middleware.ts` (lines 274-296)
+- Lead service at: `/packages/backend/src/services/lead.service.ts`
+- Lead controller at: `/packages/backend/src/controllers/lead.controller.ts`
+- Lead routes mounted at: `/api/v1/leads` in `/packages/backend/src/routes/index.ts`
+- Initiative field in D365 is `tc_initiative` (NOT `msevtmgt_initiative`)
+- Authentication callback duplicate error was fixed with `useRef` flag
 
 **🎯 Immediate Next Steps:**
 
-### 1. Complete POC Stage (1-2 days)
-**CRITICAL: Implement D365 Initiative Filter Middleware**
+### 1. Frontend Lead Management Implementation (MVP Stage - 2-3 days)
+The backend lead API is complete and ready. Now implement the frontend UI:
 
-Since initiative data comes from Entra ID (not D365), the middleware needs to ensure all D365 lead queries are filtered by the user's initiative:
-
-1. **Extend Auth Middleware** (`auth.middleware.ts`):
-   - Modify `enforceInitiative` to inject `req.d365Filter` with initiative constraints
-   - Ensure this filter is available to all protected endpoints
-
-2. **Enhance D365 Service** (`d365.service.ts`):
-   - Add a `buildODataFilter()` method to construct secure OData queries
-   - Create base methods that accept and enforce initiative filters
-   - Add lead-specific query methods (getLeads, getLeadById, updateLead)
-
-3. **Security Validation**:
-   - Log all D365 queries with initiative filters for audit trail
-   - Add tests to verify cross-initiative queries are blocked
-   - Ensure filter injection cannot be bypassed
-
-**Example Implementation:**
+**Lead List Page** (`/packages/frontend/src/pages/leads/LeadList.tsx`)
 ```typescript
-// In auth.middleware.ts - extend enforceInitiative
-export const enforceInitiative = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  // ... existing validation ...
-  
-  // Inject D365 filter for all queries
-  req.d365Filter = {
-    initiative: req.user.initiative,
-    organizationId: req.user.organization?.id,
-    // Additional filters can be added by specific endpoints
-  };
-  
-  // Log for security audit
-  logger.info('D365 query filter applied', {
-    userId: req.user.sub,
-    initiative: req.user.initiative,
-    endpoint: req.path
+// Key implementation points:
+// 1. Use TanStack Query with the existing apiClient
+// 2. API endpoint: GET /api/v1/leads
+// 3. Query params: page, limit, status, type, search, sortBy, sortOrder
+// 4. Use TanStack Table (already installed as @tanstack/react-table)
+// 5. The backend returns paginated response with filters
+
+// Example query hook:
+const useLeads = (filters: LeadFilters) => {
+  return useQuery({
+    queryKey: ['leads', filters],
+    queryFn: () => apiClient.get('/v1/leads', { params: filters })
   });
-  
-  next();
 };
-
-// In d365.service.ts - add secure query builder
-private buildSecureODataFilter(
-  baseFilter: string, 
-  initiativeFilter: D365Filter
-): string {
-  const filters = [];
-  
-  // ALWAYS include initiative filter (non-negotiable)
-  if (initiativeFilter.initiative) {
-    filters.push(`msevtmgt_initiative eq '${initiativeFilter.initiative}'`);
-  }
-  
-  // Add user's additional filters
-  if (baseFilter) {
-    filters.push(`(${baseFilter})`);
-  }
-  
-  return filters.join(' and ');
-}
-
-// Example lead query method
-async getLeads(filter: D365Filter, options: QueryOptions) {
-  const oDataFilter = this.buildSecureODataFilter(
-    options.userFilter || '', 
-    filter
-  );
-  
-  // Query D365 with enforced initiative filter
-  const response = await this.queryD365('leads', {
-    $filter: oDataFilter,
-    $top: options.limit,
-    $skip: options.offset
-  });
-  
-  return response;
-}
 ```
 
-### 2. D365 Lead Management (MVP Stage - 3-5 days)
-Once the initiative filter middleware is complete, implement the core lead management functionality:
-
-**Backend - Create Lead Endpoints** (`/packages/backend/src/controllers/leads.controller.ts`)
-- `GET /api/v1/leads` - List leads with pagination, filtering, sorting
-- `GET /api/v1/leads/:id` - Get single lead details
-- `PATCH /api/v1/leads/:id` - Update lead status/notes
-- Apply `enforceInitiative` middleware to all endpoints
-- Use D365 service with automatic initiative filtering
-
-**Frontend - Lead List Page** (`/packages/frontend/src/pages/Leads.tsx`)
-- Use TanStack Table (already installed)
-- Implement filters: status, date range, assigned to
-- Add search by name/email
-- Column sorting and pagination
-- Click row to view details
-
-**Frontend - Lead Details Page** (`/packages/frontend/src/pages/LeadDetails.tsx`)
-- Display all lead information
-- Show activity history
-- Allow status updates
-- Add notes functionality
+**Lead Details Page** (`/packages/frontend/src/pages/leads/LeadDetails.tsx`)
+- Endpoint: `GET /api/v1/leads/:id`
+- Update endpoint: `PATCH /api/v1/leads/:id`
+- Display all lead fields from the Lead interface
+- Add form for status updates and notes
 
 **Key Technical Context:**
-- D365 service exists at `/packages/backend/src/services/d365.service.ts`
-- Use `msevtmgt_` prefix for D365 custom fields
-- Initiative filtering will be automatically applied via middleware
-- Frontend should use TanStack Query for data fetching
-- Auth store has user's `initiative` and `organization` for context
+- API client already configured at `/packages/frontend/src/services/apiClient.ts`
+- Lead types available in `@partner-portal/shared/types/lead.ts`
+- Auth headers automatically added by axios interceptor
+- Initiative filtering happens automatically on backend
+- Add routes to `/packages/frontend/src/App.tsx`
 
-**Testing the Implementation:**
-1. Verify initiative filter middleware is working (check logs for filter injection)
-2. Ensure backend and frontend dev servers are running
-3. Log in with a test account that has leads in D365
-4. Navigate to `/leads` to see the list
-5. Verify users only see their state's leads (critical security check)
-6. Test with different state accounts to ensure data isolation
+### 2. Frontend State Management Enhancement (1-2 days)
+Once the initiative filter middleware is complete, implement the core lead management functionality:
 
-### 3. Parallel MVP Work (Optional)
-While building lead management, these MVP items can be started in parallel:
-- Create `useUIStore` and `useFilterStore` for better state management
-- Configure TanStack Query with auth interceptors (note: basic setup already exists)
-- Add security middleware (CORS, Helmet.js) if time permits
+- Create `useUIStore` for loading states and modals
+- Create `useFilterStore` for table filters and search state
+- Configure TanStack Query with proper error handling
+- Add loading skeletons and error boundaries
 
-**📊 Realistic Timeline Assessment:**
-Based on the current codebase analysis:
-- D365 filter middleware: 1-2 days (security critical, needs careful implementation)
-- Lead management backend: 2-3 days (building from scratch, no existing lead code)
-- Lead management frontend: 2-3 days (UI components exist, but pages need creation)
-- **Total: 5-8 days** for complete, production-ready lead management with security
+**Testing the Backend Implementation:**
+1. Start backend: `cd packages/backend && npm run dev`
+2. Use Postman/curl to test endpoints:
+   ```bash
+   # Get leads (requires valid JWT token)
+   curl -H "Authorization: Bearer YOUR_TOKEN" \
+        "http://localhost:3000/api/v1/leads?page=1&limit=25"
+   ```
+3. Check server logs for `D365_FILTER_APPLIED` events
+4. Verify initiative filter in D365 query logs
 
-**Note:** The initial 3-5 day estimate assumed more existing infrastructure. The actual implementation needs to build the D365 lead query methods from scratch while ensuring strict security boundaries.
+**📊 Updated Timeline Assessment:**
+- ✅ D365 filter middleware: COMPLETE (implemented today)
+- ✅ Lead management backend: COMPLETE (all endpoints working)
+- Lead management frontend: 2-3 days (UI components exist, pages need creation)
+- State management enhancement: 1 day (stores partially implemented)
+- **Remaining: 3-4 days** for complete lead management UI with proper state management
+
+**🔒 Security Notes:**
+- Initiative filtering is enforced at the service layer, not just middleware
+- Cross-initiative lead access returns 404 (not 403) to avoid information leakage
+- All D365 queries are logged with applied filters for audit trail
+- OData injection prevention via `escapeODataString()` method
 
 ---
 

@@ -202,7 +202,7 @@ export function hasNetworkWideAccess(roles: string[], journeyType: 'foster' | 'v
  * - Alert on critical security events (CROSS_INITIATIVE_ATTEMPT)
  */
 export function logSecurityEvent(
-  eventType: 'ACCESS_GRANTED' | 'ACCESS_DENIED' | 'CROSS_INITIATIVE_ATTEMPT' | 'INVALID_ROLE',
+  eventType: 'ACCESS_GRANTED' | 'ACCESS_DENIED' | 'CROSS_INITIATIVE_ATTEMPT' | 'INVALID_ROLE' | 'D365_FILTER_APPLIED',
   context: {
     userId: string;
     email: string;
@@ -211,6 +211,8 @@ export function logSecurityEvent(
     initiative?: string;
     requestedResource?: string;
     reason?: string;
+    filter?: any;
+    endpoint?: string;
   }
 ): void {
   const timestamp = new Date().toISOString();

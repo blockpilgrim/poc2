@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { jwtService } from '../services/jwt.service';
 import { ExtendedJWTPayload } from '../types/auth';
+import { D365Filter } from '../types/d365.types';
 import { AppError } from '../utils/errors';
 import { 
   hasRequiredRole, 
@@ -269,6 +270,30 @@ export const enforceInitiativeFromGroups = (requiredInitiative?: string) => {
 
       // Attach derived initiative to request for downstream use
       req.user.initiative = userInitiative;
+      
+      // Inject D365 filter for all protected endpoints
+      // This ensures all D365 queries are automatically filtered by initiative
+      const d365Filter: D365Filter = {
+        initiative: userInitiative,
+        userId: req.user.sub
+      };
+      
+      // Add organization ID if available
+      if (req.user.organization?.id) {
+        d365Filter.organizationId = req.user.organization.id;
+      }
+      
+      req.d365Filter = d365Filter;
+      
+      // Log D365 filter injection for security audit
+      logSecurityEvent('D365_FILTER_APPLIED', {
+        userId: req.user.sub,
+        email: req.user.email,
+        initiative: userInitiative,
+        filter: d365Filter,
+        endpoint: `${req.method} ${req.path}`
+      });
+      
       next();
     } catch (error) {
       // Handle cases where user has no valid initiative groups
@@ -311,6 +336,28 @@ export const enforceInitiative = (requiredInitiative?: string) => {
           });
           return;
         }
+        
+        // Inject D365 filter for legacy approach too
+        const d365Filter: D365Filter = {
+          initiative: req.user.initiative,
+          userId: req.user.sub
+        };
+        
+        if (req.user.organization?.id) {
+          d365Filter.organizationId = req.user.organization.id;
+        }
+        
+        req.d365Filter = d365Filter;
+        
+        // Log for consistency with new approach
+        logSecurityEvent('D365_FILTER_APPLIED', {
+          userId: req.user.sub,
+          email: req.user.email,
+          initiative: req.user.initiative,
+          filter: d365Filter,
+          endpoint: `${req.method} ${req.path}`
+        });
+        
         next();
       };
 };

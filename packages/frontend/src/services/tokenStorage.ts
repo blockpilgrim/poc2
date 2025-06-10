@@ -85,9 +85,14 @@ class TokenStorageService {
    * Extract tokens from URL query parameters and clean URL
    */
   extractTokensFromUrl(): { token: string | null; refreshToken: string | null } {
+    // Also check hash in case tokens are in fragment
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    const refreshToken = urlParams.get('refresh');
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    
+    // Check both query and hash for tokens
+    const token = urlParams.get('token') || hashParams.get('token');
+    const refreshToken = urlParams.get('refresh') || hashParams.get('refresh');
+
 
     // Clean URL to remove tokens from history
     if (token || refreshToken) {
@@ -98,6 +103,7 @@ class TokenStorageService {
         ? `${window.location.pathname}?${urlParams.toString()}`
         : window.location.pathname;
       
+      // Clear both query and hash
       window.history.replaceState({}, '', newUrl);
     }
 

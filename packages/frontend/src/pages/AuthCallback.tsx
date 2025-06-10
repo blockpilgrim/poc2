@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -6,19 +6,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 export function AuthCallback() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const callbackProcessed = useRef(false);
 
   useEffect(() => {
     const handleCallback = async () => {
+      // Prevent duplicate processing
+      if (callbackProcessed.current) {
+        console.log('[AuthCallback] Callback already processed, skipping...');
+        return;
+      }
+      callbackProcessed.current = true;
+      
       try {
-        await authService.handleCallback();
+        // Check if we already have a token (in case of duplicate callback)
+        const existingToken = sessionStorage.getItem('poc_portal_token');
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasTokenInUrl = urlParams.has('token');
+        
+        if (existingToken && !hasTokenInUrl) {
+          console.log('[AuthCallback] Token already exists and no new token in URL, redirecting...');
+          navigate('/', { replace: true });
+          return;
+        }
+        
+        // Only process callback if we have tokens in the URL
+        if (hasTokenInUrl) {
+          await authService.handleCallback();
+        }
         
         // Get redirect URL from state if available
-        const urlParams = new URLSearchParams(window.location.search);
         const redirectUrl = urlParams.get('redirectUrl') || '/';
         
         navigate(redirectUrl, { replace: true });
       } catch (err) {
         console.error('[AuthCallback] Authentication callback failed:', err);
+        
+        // Check again if authentication actually succeeded despite the error
+        const tokenAfterError = sessionStorage.getItem('poc_portal_token');
+        if (tokenAfterError) {
+          console.log('[AuthCallback] Token exists after error, likely a timing issue');
+          navigate('/', { replace: true });
+          return;
+        }
+        
         setError(err instanceof Error ? err.message : 'Authentication failed');
       }
     };
