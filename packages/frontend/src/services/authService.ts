@@ -1,7 +1,19 @@
 import axios from 'axios';
-import type { JWTPayload } from '@partner-portal/shared';
 import { tokenStorage } from './tokenStorage';
 import { useAuthStore } from '../stores/authStore';
+
+interface JWTPayloadFrontend {
+  sub: string;
+  email: string;
+  displayName?: string;
+  name?: string;
+  initiative?: string;
+  groups?: string[];
+  roles?: string[];
+  organizationId?: string;
+  organizationName?: string;
+  exp: number;
+}
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -14,10 +26,6 @@ interface LogoutResponse {
   logoutUrl: string;
 }
 
-interface AuthError {
-  error: string;
-  message: string;
-}
 
 class AuthService {
   /**
@@ -57,7 +65,7 @@ class AuthService {
     tokenStorage.setTokens(token, refreshToken || '');
 
     // Decode token and update auth store
-    const decoded = tokenStorage.decodeToken(token) as JWTPayload;
+    const decoded = tokenStorage.decodeToken(token) as JWTPayloadFrontend;
     if (decoded) {
       useAuthStore.getState().setAuthData(decoded);
     }
@@ -82,22 +90,10 @@ class AuthService {
         },
       });
 
-      const { user, initiative, roles, groups } = response.data;
       const authStore = useAuthStore.getState();
       
-      authStore.setUser(user);
-      // Update auth data with full profile information
-      authStore.setAuthData({
-        sub: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        organizationId: user.organizationId,
-        organizationName: user.organizationName,
-        initiative,
-        roles,
-        groups,
-        exp: 0, // Not used from profile endpoint
-      });
+      // Use the new setProfileData method to store all profile data including theme
+      authStore.setProfileData(response.data);
     } catch (error) {
       console.error('Failed to load user profile:', error);
       throw new Error('Failed to load user profile');
@@ -183,7 +179,7 @@ class AuthService {
       tokenStorage.setTokens(token, refresh);
 
       // Update auth store with new token data
-      const decoded = tokenStorage.decodeToken(token) as JWTPayload;
+      const decoded = tokenStorage.decodeToken(token) as JWTPayloadFrontend;
       if (decoded) {
         useAuthStore.getState().setAuthData(decoded);
       }

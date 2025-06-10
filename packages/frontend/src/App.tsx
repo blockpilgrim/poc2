@@ -8,6 +8,7 @@ import { AuthError } from './pages/AuthError'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuthStore } from './stores/authStore'
 import { authService } from './services/authService'
+import { ThemeProvider } from './providers/ThemeProvider'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,7 +20,7 @@ const queryClient = new QueryClient({
 })
 
 function AppContent() {
-  const { isAuthenticated, isLoading, user } = useAuthStore()
+  const { isAuthenticated, isLoading, user, theme, initiativeDisplayName } = useAuthStore()
 
   useEffect(() => {
     // Check for existing authentication on app load
@@ -40,15 +41,33 @@ function AppContent() {
 
   return (
     <div>
-      <nav style={{ padding: '1rem', marginBottom: '1rem', background: '#eee', borderBottom: '1px solid #ccc' }}>
+      <nav style={{ 
+        padding: '1rem', 
+        marginBottom: '1rem', 
+        background: theme?.primaryColor || '#eee', 
+        borderBottom: '1px solid #ccc' 
+      }}>
         <ul style={{ listStyle: 'none', display: 'flex', gap: '1rem', margin: 0, padding: 0, alignItems: 'center' }}>
+          {theme?.logo && (
+            <li>
+              <img 
+                src={theme.logo} 
+                alt={initiativeDisplayName || 'Logo'} 
+                style={{ height: '40px', width: 'auto' }}
+                onError={(e) => {
+                  // Hide broken image
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </li>
+          )}
           <li>
-            <Link to="/" style={{ textDecoration: 'none', color: '#333' }}>Home</Link>
+            <Link to="/" style={{ textDecoration: 'none', color: theme?.primaryColor ? '#fff' : '#333' }}>Home</Link>
           </li>
           {isAuthenticated ? (
             <>
               <li style={{ marginLeft: 'auto' }}>
-                <span style={{ marginRight: '1rem', color: '#666' }}>
+                <span style={{ marginRight: '1rem', color: theme?.primaryColor ? '#fff' : '#666' }}>
                   {user?.displayName || user?.email}
                 </span>
               </li>
@@ -70,7 +89,7 @@ function AppContent() {
             </>
           ) : (
             <li style={{ marginLeft: 'auto' }}>
-              <Link to="/login" style={{ textDecoration: 'none', color: '#333' }}>Login</Link>
+              <Link to="/login" style={{ textDecoration: 'none', color: theme?.primaryColor ? '#fff' : '#333' }}>Login</Link>
             </li>
           )}
         </ul>
@@ -94,7 +113,9 @@ function AppContent() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }

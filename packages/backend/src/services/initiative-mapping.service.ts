@@ -58,8 +58,8 @@ export class InitiativeMappingService {
       name: 'Arkansas Partner Portal',
     }],
     ['ec-oregon', {
-      primaryColor: '#0078D4',
-      secondaryColor: '#313E48',
+      primaryColor: '#00843D',
+      secondaryColor: '#FFC72C',
       logo: '/logos/oregon.svg',
       favicon: '/favicons/oregon.ico',
       name: 'Oregon Partner Portal',

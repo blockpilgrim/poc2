@@ -1,8 +1,13 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { ApiError } from '@partner-portal/shared';
 import { tokenStorage } from './tokenStorage';
 import { authService } from './authService';
 import { useAuthStore } from '../stores/authStore';
+
+interface ApiError {
+  error?: {
+    message?: string;
+  };
+}
 
 // Create axios instance with base configuration
 export const api: AxiosInstance = axios.create({

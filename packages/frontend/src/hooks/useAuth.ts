@@ -1,6 +1,5 @@
 import { useAuthStore } from '../stores/authStore';
 import { authService } from '../services/authService';
-import { useNavigate } from 'react-router-dom';
 import { useCallback } from 'react';
 
 /**
@@ -8,7 +7,6 @@ import { useCallback } from 'react';
  * Provides convenient access to auth state and actions
  */
 export function useAuth() {
-  const navigate = useNavigate();
   const {
     user,
     initiative,

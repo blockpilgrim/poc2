@@ -27,6 +27,10 @@ export default {
         // You can use these with classes like `bg-portal-red`.
         'portal-red': 'var(--primary-color)',
         'portal-white': 'var(--secondary-color)',
+        
+        // Dynamic theme colors from initiatives (hex format)
+        'theme-primary': 'var(--primary-hex)',
+        'theme-secondary': 'var(--secondary-hex)',
 
         // Shadcn/ui theme colors
         // These will be used by default for shadcn/ui components

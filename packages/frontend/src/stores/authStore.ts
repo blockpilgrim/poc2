@@ -1,11 +1,40 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { User, JWTPayload } from '@partner-portal/shared';
+
+// Frontend User type - simplified version
+export interface User {
+  id: string;
+  email: string;
+  displayName?: string;
+  name?: string;
+  organizationId?: string;
+  organizationName?: string;
+  azureId?: string;
+}
+
+export interface Theme {
+  primaryColor: string;
+  secondaryColor: string;
+  logo: string;
+  favicon: string;
+  name: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  type?: string;
+  attributes?: Record<string, any>;
+}
 
 interface AuthState {
   // State
   user: User | null;
   initiative: string | null;
+  initiativeName?: string;
+  initiativeDisplayName?: string;
+  organization: Organization | null;
+  theme: Theme | null;
   roles: string[];
   groups: string[];
   isAuthenticated: boolean;
@@ -17,9 +46,10 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearAuth: () => void;
+  setProfileData: (data: any) => void;
   
   // Derived from JWT claims
-  setAuthData: (payload: JWTPayload) => void;
+  setAuthData: (payload: any) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -28,6 +58,10 @@ export const useAuthStore = create<AuthState>()(
       // Initial state
       user: null,
       initiative: null,
+      initiativeName: undefined,
+      initiativeDisplayName: undefined,
+      organization: null,
+      theme: null,
       roles: [],
       groups: [],
       isAuthenticated: false,
@@ -51,9 +85,28 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           initiative: null,
+          initiativeName: undefined,
+          initiativeDisplayName: undefined,
+          organization: null,
+          theme: null,
           roles: [],
           groups: [],
           isAuthenticated: false,
+          isLoading: false,
+          error: null,
+        }),
+
+      setProfileData: (data) =>
+        set({
+          user: data.user,
+          initiative: data.initiative?.id || null,
+          initiativeName: data.initiative?.name,
+          initiativeDisplayName: data.initiative?.displayName,
+          organization: data.organization || null,
+          theme: data.theme || null,
+          roles: data.roles || [],
+          groups: data.groups || [],
+          isAuthenticated: true,
           isLoading: false,
           error: null,
         }),
