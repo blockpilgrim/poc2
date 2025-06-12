@@ -1,15 +1,14 @@
 import { AppError } from '../utils/errors';
 import { 
-  isValidInitiativeGroup, 
-  findBestInitiativeGroup
+  isValidInitiativeGroup
 } from '../utils/group-naming.utils';
 
 export interface InitiativeMapping {
   groupName: string;
   initiativeId: string;
   displayName: string;
-  isLegacy?: boolean;
-  isTesting?: boolean;
+  groupType?: 'all-users' | 'role' | 'standard';
+  role?: string;
 }
 
 export interface ThemeConfig {
@@ -23,30 +22,58 @@ export interface ThemeConfig {
 export class InitiativeMappingService {
   private static instance: InitiativeMappingService;
 
-  // Map of Entra ID group names to initiative configurations
-  // Supports both legacy ("EC State") and new ("Partner Portal - EC State") formats
-  private readonly initiativeMappings: Map<string, InitiativeMapping> = new Map([
-    // Legacy format groups (for backward compatibility)
-    ['EC Arkansas', { groupName: 'EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas', isLegacy: true }],
-    ['EC Oregon', { groupName: 'EC Oregon', initiativeId: 'ec-oregon', displayName: 'Oregon', isLegacy: true }],
-    ['EC Tennessee', { groupName: 'EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee', isLegacy: true }],
-    ['EC Kentucky', { groupName: 'EC Kentucky', initiativeId: 'ec-kentucky', displayName: 'Kentucky', isLegacy: true }],
-    ['EC Oklahoma', { groupName: 'EC Oklahoma', initiativeId: 'ec-oklahoma', displayName: 'Oklahoma', isLegacy: true }],
+  // Map of Entra ID group GUIDs to initiative configurations
+  // This is the primary source of truth as GUIDs are immutable
+  private readonly guidToInitiative: Map<string, InitiativeMapping> = new Map([
+    // Oregon groups
+    ['e6ae3a86-446e-40f0-a2fb-e1b83f11cd3b', { 
+      groupName: 'Partner Portal - EC Oregon - All Users',
+      initiativeId: 'ec-oregon',
+      displayName: 'Oregon',
+      groupType: 'all-users'
+    }],
+    ['b25d4508-8b32-4e7f-bc90-d2699adb12a7', {
+      groupName: 'Partner Portal - EC Oregon - Foster Only',
+      initiativeId: 'ec-oregon',
+      displayName: 'Oregon',
+      groupType: 'role',
+      role: 'Foster-Partner'
+    }],
+    ['f24c7dc3-3844-4037-90b8-c73c59b0ea30', {
+      groupName: 'Partner Portal - EC Oregon - Volunteer Only',
+      initiativeId: 'ec-oregon',
+      displayName: 'Oregon',
+      groupType: 'role',
+      role: 'Volunteer'
+    }],
+    ['6d252fee-1df8-4ba1-acf1-18c1c704f3bd', {
+      groupName: 'Partner Portal - EC Oregon - Foster & Volunteer',
+      initiativeId: 'ec-oregon',
+      displayName: 'Oregon',
+      groupType: 'role',
+      role: 'Foster-Partner,Volunteer'
+    }],
     
-    // New format groups - Production
-    ['Partner Portal - EC Arkansas', { groupName: 'Partner Portal - EC Arkansas', initiativeId: 'ec-arkansas', displayName: 'Arkansas' }],
-    ['Partner Portal - EC Oregon', { groupName: 'Partner Portal - EC Oregon', initiativeId: 'ec-oregon', displayName: 'Oregon' }],
-    ['Partner Portal - EC Tennessee', { groupName: 'Partner Portal - EC Tennessee', initiativeId: 'ec-tennessee', displayName: 'Tennessee' }],
-    ['Partner Portal - EC Kentucky', { groupName: 'Partner Portal - EC Kentucky', initiativeId: 'ec-kentucky', displayName: 'Kentucky' }],
-    ['Partner Portal - EC Oklahoma', { groupName: 'Partner Portal - EC Oklahoma', initiativeId: 'ec-oklahoma', displayName: 'Oklahoma' }],
-    
-    // New format groups - Testing
-    ['Partner Portal - EC Arkansas - Testing', { groupName: 'Partner Portal - EC Arkansas - Testing', initiativeId: 'ec-arkansas', displayName: 'Arkansas', isTesting: true }],
-    ['Partner Portal - EC Oregon - Testing', { groupName: 'Partner Portal - EC Oregon - Testing', initiativeId: 'ec-oregon', displayName: 'Oregon', isTesting: true }],
-    ['Partner Portal - EC Tennessee - Testing', { groupName: 'Partner Portal - EC Tennessee - Testing', initiativeId: 'ec-tennessee', displayName: 'Tennessee', isTesting: true }],
-    ['Partner Portal - EC Kentucky - Testing', { groupName: 'Partner Portal - EC Kentucky - Testing', initiativeId: 'ec-kentucky', displayName: 'Kentucky', isTesting: true }],
-    ['Partner Portal - EC Oklahoma - Testing', { groupName: 'Partner Portal - EC Oklahoma - Testing', initiativeId: 'ec-oklahoma', displayName: 'Oklahoma', isTesting: true }],
+    // Kentucky groups
+    ['61f913cc-0360-482d-8373-7a7cac826eb2', {
+      groupName: 'Partner Portal - EC Kentucky - All Users',
+      initiativeId: 'ec-kentucky',
+      displayName: 'Kentucky',
+      groupType: 'all-users'
+    }],
+    ['cb535635-98ee-4c38-a4f6-5a81ffba2f87', {
+      groupName: 'Partner Portal - EC Kentucky - Foster Only',
+      initiativeId: 'ec-kentucky',
+      displayName: 'Kentucky',
+      groupType: 'role',
+      role: 'Foster-Partner'
+    }],
   ]);
+
+  // Map of Entra ID group names to initiative configurations
+  // This is kept for reference but should not be used for new implementations
+  // Use guidToInitiative instead
+  private readonly initiativeMappings: Map<string, InitiativeMapping> = new Map();
 
   // Theme configurations per initiative
   private readonly initiativeThemes: Map<string, ThemeConfig> = new Map([
@@ -98,8 +125,8 @@ export class InitiativeMappingService {
 
   /**
    * Extract initiative from user's Entra ID groups
-   * Supports both legacy ("EC State") and new ("Partner Portal - EC State") formats
-   * @param groups Array of group names from Entra ID
+   * Only supports GUIDs as they are immutable and secure
+   * @param groups Array of group GUIDs from Entra ID
    * @returns Primary initiative ID
    * @throws AppError if no valid initiative group is found
    */
@@ -109,24 +136,27 @@ export class InitiativeMappingService {
       throw new AppError('No groups provided', 400);
     }
 
-    // Find the best matching initiative group using new utility
-    const initiativeGroup = findBestInitiativeGroup(groups);
-    
-
-    if (!initiativeGroup || !this.initiativeMappings.has(initiativeGroup)) {
-      console.error('[INITIATIVE-MAPPING] No valid initiative group found:', {
-        groups,
-        availableMappings: Array.from(this.initiativeMappings.keys())
-      });
-      throw new AppError(
-        'User is not assigned to any initiative group. Please contact your administrator.',
-        403
-      );
+    // Check if any groups are GUIDs and map them
+    for (const group of groups) {
+      // Check GUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+      if (group.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        const guidMapping = this.guidToInitiative.get(group.toLowerCase());
+        if (guidMapping) {
+          // Found a valid GUID mapping
+          return guidMapping.initiativeId;
+        }
+      }
     }
 
-    const mapping = this.initiativeMappings.get(initiativeGroup)!;
-    
-    return mapping.initiativeId;
+    console.error('[INITIATIVE-MAPPING] No valid initiative group found:', {
+      groups,
+      isGuid: groups.some(g => g.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)),
+      availableGuidMappings: this.guidToInitiative.size
+    });
+    throw new AppError(
+      'User is not assigned to any initiative group. Please contact your administrator.',
+      403
+    );
   }
 
   /**
@@ -148,22 +178,40 @@ export class InitiativeMappingService {
 
   /**
    * Get all initiative groups for a user
-   * Useful for users with multiple initiative access
-   * Supports both legacy and new group naming conventions
+   * Only processes GUID-based groups
    */
   getAllUserInitiatives(groups: string[]): InitiativeMapping[] {
-    return groups
-      .filter(group => isValidInitiativeGroup(group) && this.initiativeMappings.has(group))
-      .map(group => this.initiativeMappings.get(group)!)
-      .filter(Boolean);
+    const mappings: InitiativeMapping[] = [];
+    const seenInitiatives = new Set<string>();
+    
+    // Only check GUIDs
+    for (const group of groups) {
+      if (group.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        const guidMapping = this.guidToInitiative.get(group.toLowerCase());
+        if (guidMapping && !seenInitiatives.has(guidMapping.initiativeId)) {
+          mappings.push(guidMapping);
+          seenInitiatives.add(guidMapping.initiativeId);
+        }
+      }
+    }
+    
+    return mappings;
   }
 
   /**
    * Validate if a user has access to a specific initiative
+   * Only checks GUID-based groups
    */
   hasAccessToInitiative(groups: string[], initiativeId: string): boolean {
-    const userInitiatives = this.getAllUserInitiatives(groups);
-    return userInitiatives.some(init => init.initiativeId === initiativeId);
+    for (const group of groups) {
+      if (group.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        const guidMapping = this.guidToInitiative.get(group.toLowerCase());
+        if (guidMapping && guidMapping.initiativeId === initiativeId) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -176,6 +224,30 @@ export class InitiativeMappingService {
       }
     }
     return initiativeId;
+  }
+
+  /**
+   * Extract role information from user's groups
+   * Returns unique roles across all initiative groups
+   */
+  extractRolesFromGroups(groups: string[]): string[] {
+    const roles = new Set<string>();
+    
+    // Check GUIDs first
+    for (const group of groups) {
+      if (group.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        const guidMapping = this.guidToInitiative.get(group.toLowerCase());
+        if (guidMapping && guidMapping.role) {
+          // Handle comma-separated roles like "Foster-Partner,Volunteer"
+          guidMapping.role.split(',').forEach(role => roles.add(role.trim()));
+        }
+      }
+    }
+    
+    // Note: Name-based groups don't have role info in current implementation
+    // This could be extended if needed
+    
+    return Array.from(roles);
   }
 
   /**
@@ -199,15 +271,15 @@ export class InitiativeMappingService {
       throw new AppError('No valid initiative groups found', 403);
     }
 
-    // Sort initiatives by preference: new format first, production over testing, then alphabetical
+    // Sort initiatives by preference: All Users first, then role groups, then alphabetical
     const sortedInitiatives = userInitiatives.sort((a, b) => {
-      // Prefer new format over legacy
-      if (!a.isLegacy && b.isLegacy) return -1;
-      if (a.isLegacy && !b.isLegacy) return 1;
+      // Prefer All Users groups
+      if (a.groupType === 'all-users' && b.groupType !== 'all-users') return -1;
+      if (a.groupType !== 'all-users' && b.groupType === 'all-users') return 1;
       
-      // Prefer production over testing
-      if (!a.isTesting && b.isTesting) return -1;
-      if (a.isTesting && !b.isTesting) return 1;
+      // Then prefer role groups over standard
+      if (a.groupType === 'role' && b.groupType === 'standard') return -1;
+      if (a.groupType === 'standard' && b.groupType === 'role') return 1;
       
       // Alphabetical order for consistency
       return a.initiativeId.localeCompare(b.initiativeId);

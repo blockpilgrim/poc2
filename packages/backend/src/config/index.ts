@@ -42,9 +42,7 @@ const envSchema = z.object({
   
   // Group naming configuration
   PARTNER_PORTAL_GROUP_PREFIX: z.string().default('Partner Portal - EC '),
-  LEGACY_GROUP_PREFIX: z.string().default('EC '),
   TESTING_GROUP_SUFFIX: z.string().default(' - Testing'),
-  ENABLE_LEGACY_GROUP_SUPPORT: z.string().default('true').transform((val) => val === 'true'),
 });
 
 // Parse and validate environment variables

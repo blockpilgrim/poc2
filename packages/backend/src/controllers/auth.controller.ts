@@ -88,17 +88,9 @@ export class AuthController {
       let organization: OrganizationData | undefined;
 
       if (config.ENTRA_GROUPS_ENABLED) {
-        // Map group IDs to names if needed (when groups are GUIDs)
-        let groupNames = groups;
-        if (groups.length > 0 && groups[0].match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-          // Groups are GUIDs, need to fetch names
-          const groupMap = await authService.getGroupNamesFromIds(groups, authResult.accessToken);
-          groupNames = groups.map(id => groupMap.get(id) || id);
-        }
-
-        // Extract initiative from Entra ID groups
+        // Extract initiative from Entra ID groups (using GUIDs directly)
         try {
-          initiative = initiativeMappingService.extractInitiativeFromGroups(groupNames);
+          initiative = initiativeMappingService.extractInitiativeFromGroups(groups);
           initiativeName = initiativeMappingService.getInitiativeDisplayName(initiative);
           
         } catch (error) {
@@ -106,7 +98,7 @@ export class AuthController {
             error: error instanceof Error ? error.message : error,
             email: authResult.account?.username,
             groupCount: groups.length,
-            hasGroupNames: groupNames.length > 0
+            groups: groups
           });
           
           throw new AppError(
@@ -143,26 +135,11 @@ export class AuthController {
           }
         }
       } else {
-        // Legacy: Fetch initiative from D365
-        const d365Token = await authService.getD365AccessToken();
-        if (!d365Token) {
-          throw new AppError('Failed to acquire D365 access token', 500);
-        }
-
-        const { initiative: d365Initiative } = await d365Service.getUserWithInitiative(
-          authResult.account.username,
-          d365Token
+        // Groups are required when ENTRA_GROUPS_ENABLED is true
+        throw new AppError(
+          'User is not assigned to any initiative group. Please contact your administrator.',
+          403
         );
-
-        if (!d365Initiative || !d365Initiative.id) {
-          throw new AppError(
-            'User does not have an assigned initiative. Access denied.',
-            403
-          );
-        }
-
-        initiative = d365Initiative.id;
-        initiativeName = d365Initiative.name;
       }
 
       // Build user object from Entra ID claims

@@ -81,7 +81,7 @@ export function extractInitiativeFromJWT(payload: ExtendedJWTPayload): string {
     
     return initiativeMappingService.extractInitiativeFromGroups(groups);
   } catch (error) {
-    // If no groups provided, fall back to direct initiative claim for backward compatibility
+    // If initiative is already in payload, use it (set during login)
     if (payload.initiative) {
       return payload.initiative;
     }

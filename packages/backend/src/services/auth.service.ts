@@ -304,15 +304,10 @@ export class AuthService {
       console.warn('[AUTH] Microsoft Graph API unavailable, using fallback group mappings:', 
         error instanceof Error ? error.message : error);
       
-      // Fallback to known group mappings for critical groups
-      // This ensures authentication continues to work if Graph API is unavailable
-      const fallbackGroups = new Map([
-        // Verified Partner Portal group GUIDs
-        ['e6ae3a86-446e-40f0-a2fb-e1b83f11cd3b', 'Partner Portal - EC Oregon - Testing'],
-        
-        // Additional known groups can be added here as they're identified
-        // Format: ['guid', 'Partner Portal - EC {State}'] or ['guid', 'Partner Portal - EC {State} - Testing']
-      ]);
+      // Note: We no longer use fallback group name mappings
+      // All group processing should be done via GUIDs in InitiativeMappingService
+      // This fallback is kept empty to maintain the structure but should not be used
+      const fallbackGroups = new Map<string, string>();
 
       let mappedCount = 0;
       groupIds.forEach(id => {

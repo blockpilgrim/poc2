@@ -47,18 +47,21 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     }
 
     // Verify initiative claim is present (critical security boundary)
-    // Handle both Entra ID groups and legacy D365-based initiatives
-    if (config.ENTRA_GROUPS_ENABLED && decoded.groups && decoded.groups.length > 0) {
-      // New approach: Extract initiative from Entra ID groups
-      try {
-        const userInitiative = extractInitiativeFromJWT(decoded);
-        decoded.initiative = userInitiative;
-      } catch (error) {
-        throw new AppError('No valid initiative groups assigned', 403);
+    // Validate initiative is present (either from JWT or extracted from groups)
+    if (!decoded.initiative) {
+      // Only try to extract from groups if initiative is not already set
+      if (config.ENTRA_GROUPS_ENABLED && decoded.groups && decoded.groups.length > 0) {
+        // Extract initiative from Entra ID groups (supports GUIDs)
+        try {
+          const userInitiative = extractInitiativeFromJWT(decoded);
+          decoded.initiative = userInitiative;
+        } catch (error) {
+          throw new AppError('No valid initiative groups assigned', 403);
+        }
+      } else {
+        // No groups and no initiative in token
+        throw new AppError('Token missing required initiative claim', 403);
       }
-    } else if (!decoded.initiative) {
-      // Legacy approach: Initiative must be in JWT from D365
-      throw new AppError('Token missing required initiative claim', 403);
     }
 
     // Attach user context and token to request

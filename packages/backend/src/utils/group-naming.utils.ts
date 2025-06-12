@@ -15,11 +15,16 @@
 import { config } from '../config';
 
 export const GROUP_PREFIX = config.PARTNER_PORTAL_GROUP_PREFIX;
-export const LEGACY_PREFIX = config.LEGACY_GROUP_PREFIX;
 export const TESTING_SUFFIX = config.TESTING_GROUP_SUFFIX;
 
 /**
  * Check if a group follows the new Partner Portal naming convention
+ * Supports patterns like:
+ * - "Partner Portal - EC Oregon"
+ * - "Partner Portal - EC Oregon - Testing"
+ * - "Partner Portal - EC Oregon - All Users"
+ * - "Partner Portal - EC Oregon - Foster Only"
+ * - "Partner Portal - EC Oregon - Foster & Volunteer"
  */
 export function isPartnerPortalGroup(groupName: string): boolean {
   if (!groupName.startsWith(GROUP_PREFIX)) {
@@ -34,51 +39,60 @@ export function isPartnerPortalGroup(groupName: string): boolean {
     return false;
   }
   
-  // Can optionally have "Testing" as the last part
-  if (parts.length === 2 && parts[1] !== 'Testing') {
+  // State name should start with a known state identifier
+  const statePart = parts[0].trim();
+  const validStates = ['Arkansas', 'Oregon', 'Tennessee', 'Kentucky', 'Oklahoma'];
+  if (!validStates.some(state => statePart.includes(state))) {
     return false;
   }
   
-  // Should have exactly 1 or 2 parts (state name, optionally "Testing")
-  return parts.length <= 2;
+  // Can have optional suffixes (Testing, All Users, Foster Only, etc.)
+  if (parts.length > 1) {
+    const validSuffixes = [
+      'Testing',
+      'All Users',
+      'Foster Only',
+      'Volunteer Only',
+      'Foster & Volunteer'
+    ];
+    
+    // Check if the last part is a valid suffix
+    const lastPart = parts[parts.length - 1].trim();
+    return validSuffixes.includes(lastPart);
+  }
+  
+  return true;
 }
 
 /**
- * Check if legacy group support is enabled
- */
-export function isLegacyGroupSupportEnabled(): boolean {
-  return config.ENABLE_LEGACY_GROUP_SUPPORT;
-}
-
-/**
- * Check if a group follows the legacy naming convention
- */
-export function isLegacyGroup(groupName: string): boolean {
-  return isLegacyGroupSupportEnabled() &&
-         groupName.startsWith(LEGACY_PREFIX) && 
-         !groupName.startsWith(GROUP_PREFIX) && // Not the new format
-         groupName.length > LEGACY_PREFIX.length; // Has state name
-}
-
-/**
- * Check if a group is any valid initiative group (new or legacy)
+ * Check if a group is any valid initiative group
+ * Only supports GUIDs and Partner Portal format
  */
 export function isValidInitiativeGroup(groupName: string): boolean {
-  return isPartnerPortalGroup(groupName) || isLegacyGroup(groupName);
+  // Check if it's a GUID
+  if (groupName.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+    return true;
+  }
+  
+  return isPartnerPortalGroup(groupName);
 }
 
 /**
- * Extract state name from Partner Portal group (new or legacy format)
+ * Extract state name from Partner Portal group
+ * Handles patterns like "EC Oregon - All Users" -> "Oregon"
  */
 export function extractStateFromGroup(groupName: string): string | null {
   if (isPartnerPortalGroup(groupName)) {
     const afterPrefix = groupName.substring(GROUP_PREFIX.length);
-    const stateName = afterPrefix.split(' - ')[0];
-    return stateName.trim();
-  }
-  
-  if (isLegacyGroup(groupName)) {
-    return groupName.substring(LEGACY_PREFIX.length).trim();
+    const parts = afterPrefix.split(' - ');
+    const statePart = parts[0];
+    
+    // Extract just the state name (e.g., "EC Oregon" -> "Oregon")
+    const stateMatch = statePart.match(/^EC\s+(\w+)/);
+    if (stateMatch) {
+      return stateMatch[1];
+    }
+    return statePart.trim();
   }
   
   return null;
@@ -132,10 +146,10 @@ export function filterInitiativeGroups(groups: string[]): string[] {
  */
 export interface GroupClassification {
   isValid: boolean;
-  isLegacy: boolean;
   isTesting: boolean;
   stateName: string | null;
   normalizedState: string | null;
+  groupType?: 'all-users' | 'role' | 'standard';
 }
 
 /**
@@ -143,66 +157,37 @@ export interface GroupClassification {
  */
 export function classifyGroup(groupName: string): GroupClassification {
   const isValid = isValidInitiativeGroup(groupName);
-  const isLegacy = isLegacyGroup(groupName);
   const isTesting = isTestingGroup(groupName);
   const stateName = extractStateFromGroup(groupName);
   const normalizedState = normalizeGroupToState(groupName);
   
+  let groupType: 'all-users' | 'role' | 'standard' | undefined;
+  if (groupName.includes('All Users')) {
+    groupType = 'all-users';
+  } else if (groupName.includes('Foster') || groupName.includes('Volunteer')) {
+    groupType = 'role';
+  } else if (isPartnerPortalGroup(groupName)) {
+    groupType = 'standard';
+  }
+  
   return {
     isValid,
-    isLegacy,
     isTesting,
     stateName,
     normalizedState,
+    groupType,
   };
 }
 
-/**
- * Convert legacy group name to new format
- */
-export function convertLegacyToNewFormat(legacyGroupName: string): {
-  production: string;
-  testing: string;
-} | null {
-  if (!isLegacyGroup(legacyGroupName)) {
-    return null;
-  }
-  
-  const stateName = extractStateFromGroup(legacyGroupName);
-  if (!stateName) {
-    return null;
-  }
-  
-  return generateGroupNames(stateName);
-}
 
 /**
  * Find the best matching group from a list
- * Prioritizes new format over legacy, production over testing
+ * Note: This function is deprecated. Use GUID-based matching instead.
+ * Kept only for reference during migration.
  */
-export function findBestInitiativeGroup(groups: string[]): string | null {
-  const validGroups = filterInitiativeGroups(groups);
-  
-  if (validGroups.length === 0) {
-    return null;
-  }
-  
-  // Sort by preference: new format first, then production over testing
-  const sortedGroups = validGroups.sort((a, b) => {
-    const aInfo = classifyGroup(a);
-    const bInfo = classifyGroup(b);
-    
-    // Prefer new format over legacy
-    if (!aInfo.isLegacy && bInfo.isLegacy) return -1;
-    if (aInfo.isLegacy && !bInfo.isLegacy) return 1;
-    
-    // Prefer production over testing
-    if (!aInfo.isTesting && bInfo.isTesting) return -1;
-    if (aInfo.isTesting && !bInfo.isTesting) return 1;
-    
-    // Alphabetical order for consistency
-    return a.localeCompare(b);
-  });
-  
-  return sortedGroups[0];
+export function findBestInitiativeGroup(_groups: string[]): string | null {
+  // This function should not be used in production
+  // All group matching should be done via GUIDs
+  console.warn('[DEPRECATED] findBestInitiativeGroup is deprecated. Use GUID-based matching.');
+  return null;
 }
