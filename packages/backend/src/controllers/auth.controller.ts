@@ -143,12 +143,22 @@ export class AuthController {
       }
 
       // Build user object from Entra ID claims
+      console.log('[AUTH] Building user object from claims:', {
+        claims_name: claims.name,
+        account_name: authResult.account.name,
+        account_username: authResult.account.username,
+        claims_email: claims.email,
+        claims_preferred_username: claims.preferred_username,
+      });
+      
       const user = {
         id: claims.oid || claims.sub,
         email: claims.email || claims.preferred_username || authResult.account.username,
         name: claims.name || authResult.account.name || '',
         azureId: claims.oid,
       };
+      
+      console.log('[AUTH] Created user object:', user);
 
       // Generate application JWT tokens with Entra ID data
       const accessToken = jwtService.generateAccessToken({
@@ -308,6 +318,7 @@ export class AuthController {
           id: user.sub,
           email: user.email,
           name: user.name,
+          displayName: user.name, // Add displayName field for frontend compatibility
           azureId: user.azureId,
           roles: user.roles,
           permissions: user.permissions,
@@ -320,6 +331,7 @@ export class AuthController {
         },
         organization: user.organization || null, // D365 org data if available
         groups: user.groups || [],
+        roles: user.roles || [], // Include roles at root level for frontend
         theme: theme || null, // Theme configuration for dynamic UI
       });
     } catch (error) {

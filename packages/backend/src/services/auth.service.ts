@@ -248,8 +248,11 @@ export class AuthService {
       console.log('Extracted from ID token:', {
         sub: decodedToken.sub,
         email: decodedToken.email || decodedToken.preferred_username,
+        name: decodedToken.name,
         groupCount: groups.length,
-        roleCount: roles.length
+        roleCount: roles.length,
+        groups: groups,
+        roles: roles
       });
 
       return {

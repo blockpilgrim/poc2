@@ -96,7 +96,7 @@ export const useAuthStore = create<AuthState>()(
           error: null,
         }),
 
-      setProfileData: (data) =>
+      setProfileData: (data) => {
         set({
           user: data.user,
           initiative: data.initiative?.id || null,
@@ -109,13 +109,15 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
           isLoading: false,
           error: null,
-        }),
+        });
+      },
 
       setAuthData: (payload) => {
         const user: User = {
           id: payload.sub,
           email: payload.email,
-          displayName: payload.displayName || payload.email,
+          displayName: payload.displayName || payload.name || payload.email,
+          name: payload.name,
           organizationId: payload.organizationId,
           organizationName: payload.organizationName,
         };
