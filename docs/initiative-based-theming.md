@@ -8,7 +8,7 @@ The Partner Portal dynamically applies visual themes based on a user's assigned 
 
 ### 1. Authentication Flow
 1. User logs in via Azure AD
-2. Backend extracts initiative from Entra ID groups (e.g., "Partner Portal - EC Oregon")
+2. Backend extracts initiative from Entra ID group GUIDs (not names)
 3. Initiative is mapped to theme configuration (colors, logo, favicon, name)
 4. Theme data is returned in `/api/auth/me` endpoint response
 5. After successful authentication, frontend redirects to dashboard via `/auth/callback`
@@ -75,13 +75,14 @@ The Partner Portal dynamically applies visual themes based on a user's assigned 
 3. **Login with a test account:**
    - Navigate to http://localhost:5173
    - Click "Login" 
-   - Use an Entra ID account assigned to one of these groups:
-     - "Partner Portal - EC Oregon"
-     - "Partner Portal - EC Arkansas"
-     - "Partner Portal - EC Tennessee"
-     - "Partner Portal - EC Kentucky"
-     - "Partner Portal - EC Oklahoma"
+   - Use an Entra ID account assigned to one of these initiative groups:
+     - "Partner Portal - EC Oregon - All Users" (or role-specific variants)
+     - "Partner Portal - EC Arkansas - All Users" (or role-specific variants)
+     - "Partner Portal - EC Tennessee - All Users" (or role-specific variants)
+     - "Partner Portal - EC Kentucky - All Users" (or role-specific variants)
+     - "Partner Portal - EC Oklahoma - All Users" (or role-specific variants)
    - After successful authentication, you'll be redirected to the dashboard
+   - Note: The system processes group GUIDs, not names, for security
 
 4. **Verify theme application:**
    - ✓ Navigation bar background matches initiative's primary color
@@ -108,7 +109,7 @@ The Partner Portal dynamically applies visual themes based on a user's assigned 
 
 ### Backend Verification
 
-The backend processes authentication and initiative extraction through the `/api/auth/me` endpoint. User initiative is determined from their Entra ID security group membership.
+The backend processes authentication and initiative extraction through the `/api/auth/me` endpoint. User initiative is determined from their Entra ID security group GUIDs. The system uses an immutable GUID-to-initiative mapping for reliability and performance, avoiding Microsoft Graph API calls during authentication.
 
 ### API Response Example
 
@@ -149,7 +150,9 @@ The backend processes authentication and initiative extraction through the `/api
 3. Log out and log back in
 
 ### Adding new initiatives
-1. Update `initiativeThemes` map in `/packages/backend/src/services/initiative-mapping.service.ts`
-2. Add logo SVG to `/packages/frontend/public/logos/`
-3. Add favicon to `/packages/frontend/public/favicons/`
-4. Update group mappings for new Entra ID security groups
+1. Get the Entra ID group GUID(s) for the new initiative
+2. Add GUID mapping to `guidToInitiative` Map in `/packages/backend/src/services/initiative-mapping.service.ts`
+3. Update `initiativeThemes` map in the same file
+4. Add logo SVG to `/packages/frontend/public/logos/`
+5. Add favicon to `/packages/frontend/public/favicons/`
+6. Test with a user assigned to the new group

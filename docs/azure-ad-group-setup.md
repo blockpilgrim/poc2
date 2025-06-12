@@ -67,9 +67,9 @@ The Partner Portal v2.0 uses Microsoft Entra ID security groups to manage initia
 
 When users belong to multiple initiative groups, the system follows these priority rules:
 
-1. **New Format over Legacy**: `Partner Portal - EC State` takes precedence over `EC State`
-2. **Production over Testing**: Production groups take precedence over testing groups
-3. **Alphabetical Order**: If multiple groups of the same priority exist, alphabetical order determines the primary initiative
+1. **All Users over Role Groups**: `All Users` groups take precedence as they define base initiative access
+2. **Role Groups**: Foster Only, Volunteer Only, and combined role groups define permissions within the initiative
+3. **GUID-Based Processing**: The system uses group GUIDs for identification, ensuring immutability and reliability
 
 ## App Registration Configuration
 
@@ -89,6 +89,24 @@ The Azure AD app registration must have the following permissions to read group 
    - **Access token**: ✓
    - **SAML token**: ✓
 
+## GUID Mapping Configuration
+
+The Partner Portal uses group GUIDs for security and performance:
+
+1. **Extract Group GUIDs**: 
+   - Navigate to **Azure AD** > **Groups**
+   - Click on each group to view its Object ID (GUID)
+   - Document the GUID for each group
+
+2. **Update Backend Configuration**:
+   - Add GUID mappings to `/packages/backend/src/services/initiative-mapping.service.ts`
+   - Map each GUID to its initiative and role information
+
+3. **Benefits**:
+   - No Microsoft Graph API calls during authentication
+   - Immutable identifiers (groups can be renamed without breaking the system)
+   - Better performance and reliability
+
 ## Validation and Testing
 
 ### Verify Group Setup
@@ -101,17 +119,16 @@ The Azure AD app registration must have the following permissions to read group 
 // Example test cases for group validation
 const testCases = [
   {
-    groups: ['Partner Portal - EC Arkansas'],
-    expectedInitiative: 'ec-arkansas',
-    description: 'New format production group'
-  },
-  {
-    groups: ['Partner Portal - EC Oregon - Testing'],
+    groups: ['e6ae3a86-446e-40f0-a2fb-e1b83f11cd3b'], // Partner Portal - EC Oregon - All Users
     expectedInitiative: 'ec-oregon',
-    description: 'New format testing group'
+    description: 'Oregon All Users group (GUID)'
   },
   {
-    groups: ['EC Tennessee'],
+    groups: ['b25d4508-8b32-4e7f-bc90-d2699adb12a7'], // Partner Portal - EC Oregon - Foster Only
+    expectedInitiative: 'ec-oregon',
+    description: 'Oregon Foster Only group (GUID)'
+  },
+  {
     expectedInitiative: 'ec-tennessee',
     description: 'Legacy format group (backward compatibility)'
   },

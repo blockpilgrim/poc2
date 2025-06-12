@@ -76,17 +76,19 @@ This initiative will confirm the chosen technology stack's suitability to replac
 
 ### Initiative Context
 Each U.S. state expansion is managed through security groups in Microsoft Entra ID:
-- Users are assigned to Entra ID security groups (e.g., "Partner Portal - EC Arkansas", "Partner Portal - EC Oregon - Testing")
+- Users are assigned to Entra ID security groups (e.g., "Partner Portal - EC Oregon - All Users", "Partner Portal - EC Oregon - Foster Only")
 - Portal users see initiative-specific theming based on their Entra ID group membership
 - **Critical**: Users can ONLY access data tagged with their initiative
-- **Group Naming Convention**: Production groups follow "Partner Portal - EC {State}" format, testing groups append "- Testing"
+- **Group Structure**: Two-tier system with "All Users" groups for base access and role-specific groups (Foster Only, Volunteer Only, etc.)
+- **Implementation**: System uses immutable GUIDs for group identification, not names, ensuring reliability
 
 ### Security Model
 Microsoft Entra ID groups serve as the **hard security boundary**:
-1. JWT tokens include initiative claims from Entra ID group membership
-2. All API endpoints enforce initiative-based filtering using group claims
+1. JWT tokens include group GUIDs which are mapped to initiatives
+2. All API endpoints enforce initiative-based filtering using GUID-based claims
 3. Frontend queries include initiative in all data requests
 4. Cross-initiative access attempts trigger security alerts
+5. No dependency on Microsoft Graph API during authentication for better performance and reliability
 
 ### Role-Based Access Control
 Microsoft Entra ID App Roles will define user permissions. The roles are designed to provide granular access based on user responsibilities and organizational structure:
@@ -168,9 +170,10 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Implement token validation middleware (updated for groups/roles)
 - [x] Create authentication endpoints (/auth/login, /auth/callback, /auth/logout)
 - [x] Implement JWT generation for API access (refactored for groups/roles)
-- [x] **CRITICAL**: Include Entra ID groups in JWT claims
+- [x] **CRITICAL**: Include Entra ID groups in JWT claims (as GUIDs)
 - [x] **CRITICAL**: Include Entra ID app roles in JWT claims
 - [x] **CRITICAL**: Test complete end-to-end authentication flow with real Entra ID accounts and D365 data
+- [x] **CRITICAL**: Implement GUID-based initiative mapping (no Graph API calls during auth)
 - [x] Document Entra ID groups/roles configuration requirements
 - [x] Implement authentication context/provider (Frontend - via authService and authStore)
 - [x] Create login/logout flows with MSAL redirect (Frontend - complete)
@@ -178,10 +181,10 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 
 #### Basic Initiative Support
 - [x] Define Initiative type and theme contracts
-- [x] **CRITICAL**: Extract initiative from Entra ID group membership
+- [x] **CRITICAL**: Extract initiative from Entra ID group membership (GUID-based)
 - [x] **CRITICAL**: Extract roles from Entra ID app role assignments
 - [x] **CRITICAL**: Implement initiative filter middleware for D365 queries
-- [x] Refactor existing initiative validation to use Entra ID groups
+- [x] Refactor initiative validation to use Entra ID group GUIDs
 - [ ] Update frontend query keys to use group-based initiatives
 - [x] Store Entra ID groups and derived initiative in auth state (Frontend - in authStore)
 
@@ -439,7 +442,12 @@ poc-portal-2/
 │   ├── state-management.md     # State patterns documentation
 │   ├── api-contracts.md        # API documentation
 │   ├── initiatives.md          # Initiative setup guide
+│   ├── initiative-based-theming.md  # Theme implementation guide
+│   ├── azure-ad-group-setup.md # Entra ID configuration
 │   └── deployment.md           # Deployment guide
+│
+│   Key implementation docs:
+│   └── backend/src/services/GUID-MAPPING-IMPLEMENTATION.md
 ├── docker-compose.yml          # Local development setup
 └── azure-pipelines.yml         # CI/CD configuration
 ```
@@ -452,6 +460,13 @@ poc-portal-2/
 - More control over token handling and validation
 - Direct support for advanced Azure AD features including groups and app roles
 - Native support for extracting Entra ID claims from tokens
+
+#### GUID-Based Initiative Mapping
+- **Immutability**: GUIDs never change, unlike group names
+- **Performance**: No Microsoft Graph API calls during token validation
+- **Reliability**: Works even when Graph API is unavailable
+- **Security**: Smaller attack surface with no external dependencies
+- **Standards Compliance**: Aligns with Microsoft's intended design for group claims
 
 #### API Design Principles
 - RESTful design with consistent naming
@@ -497,29 +512,28 @@ const queryKeys = {
 
 // Backend Middleware
 const enforceInitiative = async (req, res, next) => {
-  // Extract primary initiative from groups using new utility
-  const userGroups = req.user.groups || [];
-  const initiativeGroup = findBestInitiativeGroup(userGroups);
+  // Extract initiative from JWT (already processed during auth)
+  const userInitiative = req.user.initiative;
 
-  if (!initiativeGroup) {
+  if (!userInitiative) {
     return res.status(403).json({ error: 'No initiative access' });
   }
 
-  const userInitiative = initiativeGroup;
-
-  // Inject into all D365 queries
-  req.d365Filter = {
-    ...req.d365Filter,
-    'initiative': userInitiative
+  // Inject D365 filter with initiative constraint
+  const d365Filter = {
+    initiative: userInitiative,
+    userId: req.user.sub
   };
 
-  // Log access for audit
-  logger.info('Data access', {
+  req.d365Filter = d365Filter;
+
+  // Log access for security audit
+  logSecurityEvent('D365_FILTER_APPLIED', {
     userId: req.user.sub,
+    email: req.user.email,
     initiative: userInitiative,
-    groups: userGroups,
-    roles: req.user.roles,
-    endpoint: req.path
+    filter: d365Filter,
+    endpoint: `${req.method} ${req.path}`
   });
 
   next();
@@ -625,6 +639,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - **Developer Experience**: <5 min setup time, hot reload for both layers
 - **State Management**: <16ms state updates, zero persistence failures
 - **Initiative Isolation**: 100% data boundary enforcement
+- **Authentication**: Zero Graph API calls during token validation (GUID-based)
 
 ## Risks & Mitigations
 
@@ -656,7 +671,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** POC Stage Complete → MVP Stage Core Features (Lead Management UI)
+<!-- **Phase:** POC Stage Complete → MVP Stage Core Features (Lead Management UI)
 
 **Status:** POC stage is now COMPLETE! Authentication, initiative-based theming, AND the critical D365 initiative filter middleware are all implemented and working. The backend lead API is ready for frontend integration.
 
@@ -668,8 +683,11 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - Protected routes and navigation
 - **NEW: D365 Initiative Filter Middleware** - Automatically injects security filters into all D365 queries
 - **NEW: Lead API Endpoints** - Full CRUD operations with mandatory initiative filtering
+- **NEW: GUID-based Initiative Mapping** - Reliable group identification without Graph API calls
 
-**🎉 Today's Implementation (D365 Initiative Filter Middleware):**
+**🎉 Today's Implementation:**
+
+**D365 Initiative Filter Middleware:**
 - Created `D365Filter` types and extended Express Request interface
 - Modified `enforceInitiative` middleware to inject `req.d365Filter` with initiative constraints
 - Implemented `LeadService` with secure OData filter construction that ALWAYS includes initiative
@@ -678,6 +696,14 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - All lead queries now automatically filter by `tc_initiative` field in D365
 - Cross-initiative access attempts return 404 (as if lead doesn't exist) for security
 
+**GUID-Based Initiative Mapping:**
+- Replaced all legacy group name processing with GUID-based approach
+- Added `guidToInitiative` Map with immutable GUID mappings
+- Removed Microsoft Graph API calls from authentication flow
+- Cleaned up all legacy code references for clarity
+- Updated all methods to only process GUIDs, not names
+- Fixed "No valid initiative group found" errors permanently
+
 **🔧 Technical Details for Next Session:**
 - D365 filter is injected at: `/packages/backend/src/middleware/auth.middleware.ts` (lines 274-296)
 - Lead service at: `/packages/backend/src/services/lead.service.ts`
@@ -685,6 +711,8 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - Lead routes mounted at: `/api/v1/leads` in `/packages/backend/src/routes/index.ts`
 - Initiative field in D365 is `tc_initiative` (NOT `msevtmgt_initiative`)
 - Authentication callback duplicate error was fixed with `useRef` flag
+- GUID-to-initiative mapping at: `/packages/backend/src/services/initiative-mapping.service.ts`
+- Groups are processed as GUIDs, not names, for immutability and performance
 
 **🎯 Immediate Next Steps:**
 
@@ -752,7 +780,7 @@ Once the initiative filter middleware is complete, implement the core lead manag
 - Initiative filtering is enforced at the service layer, not just middleware
 - Cross-initiative lead access returns 404 (not 403) to avoid information leakage
 - All D365 queries are logged with applied filters for audit trail
-- OData injection prevention via `escapeODataString()` method
+- OData injection prevention via `escapeODataString()` method -->
 
 ---
 
