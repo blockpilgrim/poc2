@@ -239,8 +239,7 @@ export class AuthService {
         throw new Error('Failed to decode ID token');
       }
 
-      // Extract groups - these will be GUIDs if there are many groups
-      // The actual group names need to be fetched from Microsoft Graph if needed
+      // Extract groups - these will be GUIDs from Entra ID
       const groups = decodedToken.groups || [];
       
       // Extract app roles - these are the role values defined in the app manifest
@@ -268,163 +267,9 @@ export class AuthService {
     }
   }
 
-  /**
-   * Get group names from group IDs using Microsoft Graph
-   * Note: This requires GroupMember.Read.All permission
-   * @param groupIds Array of group IDs from the token
-   * @param accessToken Access token with Graph permissions
-   */
-  async getGroupNamesFromIds(groupIds: string[], accessToken: string): Promise<Map<string, string>> {
-    const groupMap = new Map<string, string>();
-    
-    if (!groupIds || groupIds.length === 0) {
-      return groupMap;
-    }
-
-    try {
-      console.log(`[AUTH] Fetching names for ${groupIds.length} groups from Microsoft Graph API`);
-      
-      // Use batch requests for better performance when fetching multiple groups
-      // Microsoft Graph supports up to 20 requests in a single batch
-      const batchSize = 20;
-      const batches = [];
-      
-      for (let i = 0; i < groupIds.length; i += batchSize) {
-        const batch = groupIds.slice(i, i + batchSize);
-        batches.push(batch);
-      }
-
-      for (const batch of batches) {
-        await this.fetchGroupBatch(batch, accessToken, groupMap);
-      }
-
-      console.log(`[AUTH] Successfully resolved ${groupMap.size} of ${groupIds.length} group names`);
-      return groupMap;
-    } catch (error) {
-      console.warn('[AUTH] Microsoft Graph API unavailable, using fallback group mappings:', 
-        error instanceof Error ? error.message : error);
-      
-      // Note: We no longer use fallback group name mappings
-      // All group processing should be done via GUIDs in InitiativeMappingService
-      // This fallback is kept empty to maintain the structure but should not be used
-      const fallbackGroups = new Map<string, string>();
-
-      let mappedCount = 0;
-      groupIds.forEach(id => {
-        const name = fallbackGroups.get(id);
-        if (name) {
-          groupMap.set(id, name);
-          mappedCount++;
-        }
-      });
-
-      if (mappedCount > 0) {
-        console.log(`[AUTH] Mapped ${mappedCount} groups using fallback mappings`);
-      }
-
-      return groupMap;
-    }
-  }
-
-  /**
-   * Fetch a batch of group names from Microsoft Graph
-   * @param groupIds Array of group IDs to fetch
-   * @param accessToken Access token with Graph permissions
-   * @param groupMap Map to populate with results
-   */
-  private async fetchGroupBatch(
-    groupIds: string[], 
-    accessToken: string, 
-    groupMap: Map<string, string>
-  ): Promise<void> {
-    try {
-      // Build batch request for Microsoft Graph
-      const requests = groupIds.map((groupId, index) => ({
-        id: index.toString(),
-        method: 'GET',
-        url: `/groups/${groupId}?$select=id,displayName,description`
-      }));
-
-      const batchRequest = {
-        requests
-      };
-
-      const response = await fetch('https://graph.microsoft.com/v1.0/$batch', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(batchRequest)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Graph API batch request failed: ${response.status} ${response.statusText}`);
-      }
-
-      const batchResult: any = await response.json();
-      
-      // Process batch responses
-      batchResult.responses?.forEach((response: any, index: number) => {
-        const groupId = groupIds[index];
-        
-        if (response.status === 200 && response.body) {
-          const group = response.body;
-          groupMap.set(groupId, group.displayName || 'Unknown Group');
-        } else if (response.status === 404) {
-          console.warn(`Group ${groupId} not found (404)`);
-        } else {
-          console.warn(`Failed to fetch group ${groupId}: ${response.status}`, response.body);
-        }
-      });
-
-    } catch (error) {
-      console.error('Error in batch request:', error);
-      
-      // Fallback to individual requests if batch fails
-      console.log('Falling back to individual group requests...');
-      await this.fetchGroupsIndividually(groupIds, accessToken, groupMap);
-    }
-  }
-
-  /**
-   * Fallback method to fetch groups individually if batch request fails
-   * @param groupIds Array of group IDs to fetch
-   * @param accessToken Access token with Graph permissions  
-   * @param groupMap Map to populate with results
-   */
-  private async fetchGroupsIndividually(
-    groupIds: string[], 
-    accessToken: string, 
-    groupMap: Map<string, string>
-  ): Promise<void> {
-    for (const groupId of groupIds) {
-      try {
-        const response = await fetch(`https://graph.microsoft.com/v1.0/groups/${groupId}?$select=id,displayName,description`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const group: any = await response.json();
-          groupMap.set(groupId, group.displayName || 'Unknown Group');
-        } else if (response.status === 404) {
-          console.warn(`Group ${groupId} not found`);
-        } else {
-          console.warn(`Failed to fetch group ${groupId}: ${response.status}`);
-        }
-        
-        // Add small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-      } catch (error) {
-        console.error(`Error fetching individual group ${groupId}:`, error);
-      }
-    }
-  }
+  // Note: Group name resolution from Microsoft Graph has been removed.
+  // The system now uses hardcoded GUID-to-initiative mappings in InitiativeMappingService
+  // for better performance and reliability.
 }
 
 // Export singleton instance

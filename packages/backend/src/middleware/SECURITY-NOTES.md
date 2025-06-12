@@ -52,13 +52,14 @@ router.post('/login', authLimiter, authController.login);
 - Set up alerts for CROSS_INITIATIVE_ATTEMPT events
 - Implement log retention policy
 
-### 5. Group GUID Resolution (MEDIUM PRIORITY)
-**Current State**: `getGroupNamesFromIds()` not implemented
-**Risk**: Authentication fails when Azure AD returns GUIDs instead of names
-**Required Action**:
-- Implement Microsoft Graph API integration
-- Cache group name mappings
-- Add fallback for GUID-based groups
+### 5. Group GUID Resolution (COMPLETED)
+**Current State**: Hardcoded GUID-to-initiative mappings in `InitiativeMappingService`
+**Solution**: System uses predefined GUID mappings for all known groups
+**Benefits**:
+- No external API dependencies during authentication
+- Better performance (no Graph API calls)
+- More reliable (no API failures)
+- All group mappings centralized in one service
 
 ## Security Best Practices Implemented
 
