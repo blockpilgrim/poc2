@@ -256,13 +256,13 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 
 #### Frontend Data Layer
 - [x] Configure TanStack Query with auth interceptors (QueryClient configured, interceptors in place)
-- [ ] Port query/mutation patterns from Next.js
-- [ ] Implement optimistic updates
+- [x] Port query/mutation patterns from Next.js (adapted for Vite/React)
+- [x] Implement optimistic updates (in useUpdateLead hook)
 - [ ] Add error boundary integration
-- [ ] Create data prefetching strategies
-- [ ] Integrate with Zustand for hybrid state management
-- [ ] Create initiative-aware query factory
-- [ ] **CRITICAL**: Create TanStack Query hooks for API endpoints
+- [x] Create data prefetching strategies (query prefetching implemented)
+- [x] Integrate with Zustand for hybrid state management (filterStore provides state, TanStack Query manages server state)
+- [x] Create initiative-aware query factory (all query keys include initiative)
+- [x] **CRITICAL**: Create TanStack Query hooks for API endpoints (complete with all CRUD operations)
 
 #### Essential UI Implementation
 - [ ] Port page layouts from Next.js app
@@ -673,118 +673,82 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** MVP Stage Core Features - Phase 1 COMPLETE ✅ → Phase 2: Data Fetching Layer
+**Phase:** MVP Stage Core Features - Phase 2 COMPLETE ✅ → Phase 3: Lead Management UI
 
-**Status:** Phase 1 State Management Foundation is COMPLETE!
+**Status:** Phase 2 Data Fetching Layer is COMPLETE!
 
 **✅ Phase 1 Completed (State Management):**
-- ✅ **uiStore** implemented with:
-  - Loading states with stack-based management for concurrent operations
-  - Modal system supporting confirm/alert/custom types with callbacks
-  - Toast notifications with auto-dismiss and action support
-  - Navigation state (sidebar/mobile menu)
-  - Full TypeScript types and JSDoc documentation
-- ✅ **filterStore** implemented with:
-  - Comprehensive lead filtering (status, type, assignee, organization, priority, tags, date range)
-  - Search with automatic pagination reset
-  - Sorting with smart toggle behavior
-  - Pagination state management
-  - Persistence for selected filters (using Zustand persist middleware)
-  - URL sync helper for deep linking
-  - Generic table filter support for future entities
-- ✅ **Store utilities** created:
-  - Type-safe utility functions in `stores/utils.ts`
-  - Shared types in `stores/types.ts`
-  - Robust ID generation and error handling
-- ✅ All stores follow existing patterns from `authStore`
-- ✅ Central exports updated in `stores/index.ts`
+- ✅ **uiStore** implemented with loading states, modals, toasts, navigation
+- ✅ **filterStore** implemented with comprehensive filtering, search, sort, pagination
+- ✅ **Store utilities** with type-safe functions and shared types
 
-**🏗️ Infrastructure Ready for Phase 2:**
-- Backend Lead API: Fully operational at `/api/v1/leads` with initiative filtering
-- TanStack Query: QueryClient configured with auth interceptors
-- API Client: Axios instance ready at `/packages/frontend/src/services/apiClient.ts`
-- TypeScript Types: Lead types available in `@partner-portal/shared`
-- Authentication: JWT tokens automatically included in requests
+**✅ Phase 2 Completed (Data Fetching Layer):**
+- ✅ **TanStack Query Hooks** implemented:
+  - `useLeads` - List query with automatic filter integration from filterStore
+  - `useLead` - Single lead query with error handling
+  - `useUpdateLead` - Update mutation with optimistic updates
+  - `useCreateLead` - Create mutation with cache invalidation
+  - `useLeadStats` - Statistics query for dashboards
+  - `useBulkUpdateLeads` - Bulk operations with confirmation
+- ✅ **Security**: All query keys include initiative ID for data segregation
+- ✅ **Store Integration**:
+  - Filters automatically pulled from filterStore
+  - Pagination updated after successful queries
+  - Error messages shown as toasts via uiStore
+  - No loading state duplication (uses TanStack Query's states)
+- ✅ **Centralized Utilities**:
+  - Error handling in `utils/errorHandling.ts`
+  - Query options in `utils/queryOptions.ts`
+  - Query keys factory in `queryKeys.ts`
+- ✅ **TypeScript**: Fully typed with no errors
+- ✅ **Documentation**: Added comprehensive guides in `/docs`
 
-**🔧 Key Technical Context for Phase 2:**
+**🏗️ Infrastructure Ready for Phase 3:**
+- All query hooks ready and tested
+- Filter state management complete
+- Error handling shows user-friendly toasts
+- Optimistic updates for instant UI feedback
+- Cache invalidation strategies in place
 
-**Store Integration Points:**
+**🔧 Critical Context for Phase 3 UI Implementation:**
+
+**DO NOT duplicate these features (already handled by hooks):**
 ```typescript
-// uiStore can manage loading states for queries
-const { startLoading, stopLoading, showToast } = useUIStore();
+// ❌ DON'T do this - loading state already in query
+const [isLoading, setIsLoading] = useState(false);
 
-// filterStore provides filter state for queries
-const { leadFilters } = useFilterStore();
-const queryKey = ['leads', leadFilters];
-
-// authStore provides initiative context
-const { initiative } = useAuthStore();
+// ✅ DO this - use query's loading state
+const { data, isLoading } = useLeads();
 ```
 
-**API Endpoints Available:**
-- `GET /api/v1/leads` - List with pagination/filtering (returns `PaginatedResponse<Lead>`)
-- `GET /api/v1/leads/:id` - Single lead details (returns `Lead`)
-- `PATCH /api/v1/leads/:id` - Update lead (partial `Lead` updates)
-- `GET /api/v1/leads/stats` - Lead statistics
+**Filter Integration is Automatic:**
+```typescript
+// The useLeads hook automatically uses filters from filterStore
+const { data } = useLeads(); // No need to pass filters!
 
-**Backend Security:**
-- Initiative filtering is automatic (enforced by middleware)
-- Cross-initiative access returns 404
-- All queries logged with `D365_FILTER_APPLIED` events
-
-**🎯 Phase 2: Data Fetching Layer (Ready to Start):**
-
-### Phase 2: Implement Data Fetching Layer (Next Session)
-
-**Directory Structure:**
-```
-/packages/frontend/src/
-├── hooks/
-│   ├── queries/
-│   │   ├── leads/
-│   │   │   ├── useLeads.ts         # List query with filters
-│   │   │   ├── useLead.ts          # Single lead query
-│   │   │   ├── useUpdateLead.ts    # Update mutation
-│   │   │   ├── useCreateLead.ts    # Create mutation (if needed)
-│   │   │   └── index.ts            # Barrel export
-│   │   └── index.ts
-│   └── index.ts
-└── services/
-    ├── apiClient.ts                 # ✅ Already exists
-    └── queryClient.ts               # ✅ Already configured
+// To change filters, use filterStore actions
+const { setLeadStatus, setLeadSearch } = useFilterStore();
 ```
 
-**Key Implementation Requirements:**
-1. **Query Keys Factory Pattern:**
-   ```typescript
-   const leadKeys = {
-     all: ['leads'] as const,
-     lists: () => [...leadKeys.all, 'list'] as const,
-     list: (filters: LeadFilters) => [...leadKeys.lists(), filters] as const,
-     details: () => [...leadKeys.all, 'detail'] as const,
-     detail: (id: string) => [...leadKeys.details(), id] as const,
-   };
-   ```
+**Error Handling is Built-in:**
+```typescript
+// Errors automatically show as toasts
+const { data, error } = useLeads();
+// No need to handle error - toast will appear
+```
 
-2. **Store Integration:**
-   - Use `filterStore` for query parameters
-   - Update `filterStore` pagination after successful queries
-   - Use `uiStore` for error toasts and modals
-   - Avoid duplicating loading states (use TanStack Query's isLoading)
+**Initiative Security is Enforced:**
+```typescript
+// All queries automatically include user's initiative
+// This happens behind the scenes - you don't need to pass it
+const { data } = useLeads(); // Initiative included in query key
+```
 
-3. **Error Handling:**
-   - Transform API errors to user-friendly messages
-   - Show toasts for errors using `uiStore.showToast()`
-   - Handle 404s gracefully (could mean no access)
+**🎯 Phase 3: Build Lead Management UI (Ready to Start):**
 
-4. **Type Safety:**
-   - Use types from `@partner-portal/shared`
-   - Ensure proper typing for query functions
-   - Type-safe error handling
+### Phase 3: Lead Management UI Components
 
-### Phase 3: Build Lead Management UI (After Phase 2)
-
-**Component Architecture:**
+**Component Architecture to Build:**
 ```
 /packages/frontend/src/
 ├── components/
@@ -809,59 +773,74 @@ const { initiative } = useAuthStore();
 │       └── [id].tsx                    # Detail page
 ```
 
-**Integration Points:**
-- DataTable uses `filterStore` for state
-- LeadTable uses `useLeads` hook from Phase 2
-- Forms use React Hook Form + Zod
-- Status updates use `useUpdateLead` mutation
+**Key Implementation Guidelines:**
 
-**Key Features:**
-- URL state synchronization
-- Optimistic updates
-- Loading skeletons
-- Error boundaries
-- Responsive design
+1. **Use the Hooks - Don't Reinvent:**
+   - `useLeads()` for list data (filters automatic)
+   - `useLead(id)` for single lead
+   - `useUpdateLead()` for edits
+   - Loading/error states from queries
 
-### 4. Enhance Navigation with Role-Based Links (0.5-1 day)
+2. **shadcn/ui Components Available:**
+   - Button, Card, Dialog, Input already set up
+   - Use these for consistent styling
+   - Add Table components from shadcn/ui
 
-- Update Header component with navigation menu
-- Implement role/initiative-based link visibility:
-  - "Results Dashboard" for ec-oregon initiative
-  - "Foster Leads" for Foster Partner role (ec-kentucky)
-  - "Volunteer Leads" for Volunteer Partner role (ec-kentucky)
-- Create navigation configuration system
-- Test with different user roles and initiatives
+3. **Filter Controls:**
+   - Connect to filterStore actions
+   - Don't manage filter state locally
+   - Use `setLeadStatus`, `setLeadSearch`, etc.
 
-**📊 Implementation Progress:**
-1. ✅ Backend Infrastructure: COMPLETE
-   - D365 filter middleware ✓
-   - Lead management API ✓
-   - Authentication & security ✓
+4. **URL State Sync:**
+   - Use React Router for `/leads` and `/leads/:id`
+   - Consider syncing filters to URL for deep linking
 
-2. ✅ Phase 1 - State Management: COMPLETE
-   - uiStore (loading, modals, toasts) ✓
-   - filterStore (search, filters, pagination) ✓
-   - Store utilities and types ✓
+5. **TypeScript Types:**
+   - Import from `@partner-portal/shared`
+   - Lead, LeadStatus, LeadType, etc.
 
-3. 🎯 Phase 2 - Data Fetching: READY TO START
-   - TanStack Query hooks for leads
-   - Error handling integration
-   - Store synchronization
+**Success Criteria:**
+- DataTable component with sorting, filtering, pagination
+- Lead list page showing all leads with filters
+- Lead detail page with edit capability
+- Responsive design for mobile/desktop
+- Loading skeletons for better UX
+- Empty states with clear CTAs
 
-4. ⏳ Phase 3 - Lead Management UI: PENDING
-   - Reusable table components
-   - Lead pages (list/detail)
-   - Form integration
+**Next Steps After Phase 3:**
+- Phase 4: Role-based navigation in Header
+- Phase 5: Dashboard with statistics
+- Phase 6: Testing and error boundaries
 
-5. ⏳ Phase 4 - Navigation Enhancement: PENDING
-   - Role-based menu items
-   - Initiative-specific routes
+**📁 Phase 2 Deliverables (What's Available for Phase 3):**
 
-**🔧 Technical Debt & Considerations:**
-- ESLint configuration needs fixing (known issue with @typescript-eslint)
-- Consider implementing React Error Boundaries before Phase 3
-- Plan for loading skeleton components
+```
+/packages/frontend/src/hooks/queries/
+├── queryKeys.ts              # Query key factory with initiative security
+├── utils/
+│   ├── errorHandling.ts      # Centralized error handling
+│   └── queryOptions.ts       # Standardized query configurations
+├── leads/
+│   ├── useLeads.ts          # ✅ List query (auto-uses filterStore)
+│   ├── useLead.ts           # ✅ Single lead query
+│   ├── useUpdateLead.ts     # ✅ Update with optimistic updates
+│   ├── useCreateLead.ts     # ✅ Create with cache invalidation
+│   ├── useLeadStats.ts      # ✅ Statistics for dashboards
+│   └── useBulkUpdateLeads.ts # ✅ Bulk operations
+└── README.md                # Implementation guide
+
+/docs/
+├── data-fetching.md         # Comprehensive TanStack Query guide
+└── data-fetching-patterns.md # Quick reference patterns
+```
+
+**🔧 Technical Considerations for Phase 3:**
+- TanStack Table is not yet installed - install when building tables
+- React Hook Form + Zod are available for forms
+- Consider React Error Boundaries before building UI
+- Plan loading skeletons (shadcn/ui has Skeleton component)
 - Design empty states for better UX
+- ESLint has known issues with @typescript-eslint (can ignore for now)
 
 **🔒 Security Reminders:**
 - Never store sensitive data in Zustand stores
