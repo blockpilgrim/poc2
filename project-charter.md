@@ -255,13 +255,14 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Create cross-initiative access alerts
 
 #### Frontend Data Layer
-- [ ] Configure TanStack Query with auth interceptors
+- [x] Configure TanStack Query with auth interceptors (QueryClient configured, interceptors in place)
 - [ ] Port query/mutation patterns from Next.js
 - [ ] Implement optimistic updates
 - [ ] Add error boundary integration
 - [ ] Create data prefetching strategies
 - [ ] Integrate with Zustand for hybrid state management
 - [ ] Create initiative-aware query factory
+- [ ] **CRITICAL**: Create TanStack Query hooks for API endpoints
 
 #### Essential UI Implementation
 - [ ] Port page layouts from Next.js app
@@ -269,9 +270,10 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [ ] Port table components with TanStack Table
 - [ ] Implement loading and error states
 - [ ] Add responsive design considerations
-- [ ] Implement initiative-based theme system
-- [ ] Add initiative branding components
+- [x] Implement initiative-based theme system (ThemeProvider with dynamic CSS variables)
+- [x] Add initiative branding components (logos, colors in Header)
 - [ ] Connect UI to structured state stores
+- [ ] **CRITICAL**: Create data display components (tables, lists, cards)
 
 #### Security & Environment Configuration
 - [ ] Configure CORS for frontend domain
@@ -671,9 +673,14 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-<!-- **Phase:** POC Stage Complete → MVP Stage Core Features (Lead Management UI)
+**Phase:** POC Stage Complete → MVP Stage Core Features (State Management & Lead Management UI)
 
-**Status:** POC stage is now COMPLETE! Authentication, initiative-based theming, AND the critical D365 initiative filter middleware are all implemented and working. The backend lead API is ready for frontend integration.
+**Status:** POC stage is COMPLETE! Core infrastructure is solid:
+- ✅ Authentication with Azure AD (MSAL)
+- ✅ Initiative-based theming and security
+- ✅ Backend lead API with D365 integration
+- ✅ TanStack Query setup (QueryClient configured)
+- ⚠️ Missing: Additional state stores and data fetching implementation
 
 **✅ What's Working:**
 - Full authentication flow with Entra ID groups and roles
@@ -685,7 +692,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - **NEW: Lead API Endpoints** - Full CRUD operations with mandatory initiative filtering
 - **NEW: GUID-based Initiative Mapping** - Reliable group identification without Graph API calls
 
-**🎉 Today's Implementation:**
+**🎉 Recent Implementation:**
 
 **D365 Initiative Filter Middleware:**
 - Created `D365Filter` types and extended Express Request interface
@@ -714,10 +721,56 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - GUID-to-initiative mapping at: `/packages/backend/src/services/initiative-mapping.service.ts`
 - Groups are processed as GUIDs, not names, for immutability and performance
 
-**🎯 Immediate Next Steps:**
+**🎯 Immediate Next Steps (Revised Priority Order):**
 
-### 1. Frontend Lead Management Implementation (MVP Stage - 2-3 days)
-The backend lead API is complete and ready. Now implement the frontend UI:
+### 1. Complete State Management Foundation (1 day)
+**Why First**: Required infrastructure for all data-driven UI components
+
+**Create useUIStore** (`/packages/frontend/src/stores/uiStore.ts`)
+```typescript
+interface UIState {
+  isLoading: boolean;
+  loadingMessage?: string;
+  modal: { isOpen: boolean; type?: string; data?: any };
+  toast: { show: boolean; message: string; type: 'success' | 'error' | 'info' };
+  // Actions
+  setLoading: (loading: boolean, message?: string) => void;
+  showModal: (type: string, data?: any) => void;
+  closeModal: () => void;
+  showToast: (message: string, type: ToastType) => void;
+}
+```
+
+**Create useFilterStore** (`/packages/frontend/src/stores/filterStore.ts`)
+```typescript
+interface FilterState {
+  leads: {
+    search: string;
+    status?: string;
+    type?: string;
+    sortBy: string;
+    sortOrder: 'asc' | 'desc';
+    page: number;
+    limit: number;
+  };
+  // Actions
+  setLeadFilters: (filters: Partial<LeadFilters>) => void;
+  resetLeadFilters: () => void;
+}
+```
+
+### 2. Implement Data Fetching Layer (1 day)
+**Why Second**: Bridges the gap between backend API and UI components
+
+- Create custom hooks directory: `/packages/frontend/src/hooks/queries/`
+- Implement `useLeads` hook with TanStack Query
+- Implement `useLead` hook for single lead details
+- Implement `useUpdateLead` mutation
+- Add proper error handling and loading states
+- Integrate with Zustand stores for state coordination
+
+### 3. Build Lead Management UI (2-3 days)
+**Why Third**: Now we have all the infrastructure to build functional pages
 
 **Lead List Page** (`/packages/frontend/src/pages/leads/LeadList.tsx`)
 ```typescript
@@ -750,13 +803,27 @@ const useLeads = (filters: LeadFilters) => {
 - Initiative filtering happens automatically on backend
 - Add routes to `/packages/frontend/src/App.tsx`
 
-### 2. Frontend State Management Enhancement (1-2 days)
-Once the initiative filter middleware is complete, implement the core lead management functionality:
+**Table Components** (`/packages/frontend/src/components/data/`)
+- Implement reusable DataTable with TanStack Table
+- Add column definitions for leads
+- Implement sorting, filtering, and pagination UI
+- Create loading skeletons and empty states
 
-- Create `useUIStore` for loading states and modals
-- Create `useFilterStore` for table filters and search state
-- Configure TanStack Query with proper error handling
-- Add loading skeletons and error boundaries
+**Lead Pages**
+- Create `/packages/frontend/src/pages/leads/index.tsx` (list view)
+- Create `/packages/frontend/src/pages/leads/[id].tsx` (detail view)
+- Add routes to App.tsx
+- Connect to stores and API hooks
+
+### 4. Enhance Navigation with Role-Based Links (0.5-1 day)
+
+- Update Header component with navigation menu
+- Implement role/initiative-based link visibility:
+  - "Results Dashboard" for ec-oregon initiative
+  - "Foster Leads" for Foster Partner role (ec-kentucky)
+  - "Volunteer Leads" for Volunteer Partner role (ec-kentucky)
+- Create navigation configuration system
+- Test with different user roles and initiatives
 
 **Testing the Backend Implementation:**
 1. Start backend: `cd packages/backend && npm run dev`
@@ -769,12 +836,22 @@ Once the initiative filter middleware is complete, implement the core lead manag
 3. Check server logs for `D365_FILTER_APPLIED` events
 4. Verify initiative filter in D365 query logs
 
-**📊 Updated Timeline Assessment:**
-- ✅ D365 filter middleware: COMPLETE
-- ✅ Lead management backend: COMPLETE (all endpoints working)
-- Lead management frontend: 2-3 days (UI components exist, pages need creation)
-- State management enhancement: 1 day (stores partially implemented)
-- **Remaining: 3-4 days** for complete lead management UI with proper state management
+**📊 Revised Timeline with Clear Dependencies:**
+1. ✅ Backend Infrastructure: COMPLETE
+   - D365 filter middleware ✓
+   - Lead management API ✓
+   - Authentication & security ✓
+
+2. 🔨 Frontend Implementation (4.5-6 days total):
+   - Day 1: State management foundation (stores)
+   - Day 2: Data fetching layer (TanStack Query hooks)
+   - Days 3-5: Lead management UI (tables, pages, forms)
+   - Day 5.5-6: Navigation enhancement (role-based menus)
+
+**Critical Success Factors:**
+- Complete each phase before moving to the next
+- Test infrastructure components thoroughly
+- Avoid shortcuts that create technical debt
 
 **🔒 Security Notes:**
 - Initiative filtering is enforced at the service layer, not just middleware
