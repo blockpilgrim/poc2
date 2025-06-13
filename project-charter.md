@@ -673,147 +673,154 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** POC Stage Complete → MVP Stage Core Features (State Management & Lead Management UI)
+**Phase:** MVP Stage Core Features - Phase 1 COMPLETE ✅ → Phase 2: Data Fetching Layer
 
-**Status:** POC stage is COMPLETE! Core infrastructure is solid:
-- ✅ Authentication with Azure AD (MSAL)
-- ✅ Initiative-based theming and security
-- ✅ Backend lead API with D365 integration
-- ✅ TanStack Query setup (QueryClient configured)
-- ⚠️ Missing: Additional state stores and data fetching implementation
+**Status:** Phase 1 State Management Foundation is COMPLETE!
 
-**✅ What's Working:**
-- Full authentication flow with Entra ID groups and roles
-- Initiative-based theming (logos, colors, titles) based on user's state
-- User profile integration with D365 organization data
-- Auth state management with Zustand
-- Protected routes and navigation
-- **NEW: D365 Initiative Filter Middleware** - Automatically injects security filters into all D365 queries
-- **NEW: Lead API Endpoints** - Full CRUD operations with mandatory initiative filtering
-- **NEW: GUID-based Initiative Mapping** - Reliable group identification without Graph API calls
+**✅ Phase 1 Completed (State Management):**
+- ✅ **uiStore** implemented with:
+  - Loading states with stack-based management for concurrent operations
+  - Modal system supporting confirm/alert/custom types with callbacks
+  - Toast notifications with auto-dismiss and action support
+  - Navigation state (sidebar/mobile menu)
+  - Full TypeScript types and JSDoc documentation
+- ✅ **filterStore** implemented with:
+  - Comprehensive lead filtering (status, type, assignee, organization, priority, tags, date range)
+  - Search with automatic pagination reset
+  - Sorting with smart toggle behavior
+  - Pagination state management
+  - Persistence for selected filters (using Zustand persist middleware)
+  - URL sync helper for deep linking
+  - Generic table filter support for future entities
+- ✅ **Store utilities** created:
+  - Type-safe utility functions in `stores/utils.ts`
+  - Shared types in `stores/types.ts`
+  - Robust ID generation and error handling
+- ✅ All stores follow existing patterns from `authStore`
+- ✅ Central exports updated in `stores/index.ts`
 
-**🎉 Recent Implementation:**
+**🏗️ Infrastructure Ready for Phase 2:**
+- Backend Lead API: Fully operational at `/api/v1/leads` with initiative filtering
+- TanStack Query: QueryClient configured with auth interceptors
+- API Client: Axios instance ready at `/packages/frontend/src/services/apiClient.ts`
+- TypeScript Types: Lead types available in `@partner-portal/shared`
+- Authentication: JWT tokens automatically included in requests
 
-**D365 Initiative Filter Middleware:**
-- Created `D365Filter` types and extended Express Request interface
-- Modified `enforceInitiative` middleware to inject `req.d365Filter` with initiative constraints
-- Implemented `LeadService` with secure OData filter construction that ALWAYS includes initiative
-- Created `LeadController` with pagination, filtering, search, and sorting support
-- Added security logging with new `D365_FILTER_APPLIED` event type
-- All lead queries now automatically filter by `tc_initiative` field in D365
-- Cross-initiative access attempts return 404 (as if lead doesn't exist) for security
+**🔧 Key Technical Context for Phase 2:**
 
-**GUID-Based Initiative Mapping:**
-- Replaced all legacy group name processing with GUID-based approach
-- Added `guidToInitiative` Map with immutable GUID mappings
-- Removed Microsoft Graph API calls from authentication flow
-- Cleaned up all legacy code references for clarity
-- Updated all methods to only process GUIDs, not names
-- Fixed "No valid initiative group found" errors permanently
-
-**🔧 Technical Details for Next Session:**
-- D365 filter is injected at: `/packages/backend/src/middleware/auth.middleware.ts` (lines 274-296)
-- Lead service at: `/packages/backend/src/services/lead.service.ts`
-- Lead controller at: `/packages/backend/src/controllers/lead.controller.ts`
-- Lead routes mounted at: `/api/v1/leads` in `/packages/backend/src/routes/index.ts`
-- Initiative field in D365 is `tc_initiative` (NOT `msevtmgt_initiative`)
-- Authentication callback duplicate error was fixed with `useRef` flag
-- GUID-to-initiative mapping at: `/packages/backend/src/services/initiative-mapping.service.ts`
-- Groups are processed as GUIDs, not names, for immutability and performance
-
-**🎯 Immediate Next Steps (Revised Priority Order):**
-
-### 1. Complete State Management Foundation (1 day)
-**Why First**: Required infrastructure for all data-driven UI components
-
-**Create useUIStore** (`/packages/frontend/src/stores/uiStore.ts`)
+**Store Integration Points:**
 ```typescript
-interface UIState {
-  isLoading: boolean;
-  loadingMessage?: string;
-  modal: { isOpen: boolean; type?: string; data?: any };
-  toast: { show: boolean; message: string; type: 'success' | 'error' | 'info' };
-  // Actions
-  setLoading: (loading: boolean, message?: string) => void;
-  showModal: (type: string, data?: any) => void;
-  closeModal: () => void;
-  showToast: (message: string, type: ToastType) => void;
-}
+// uiStore can manage loading states for queries
+const { startLoading, stopLoading, showToast } = useUIStore();
+
+// filterStore provides filter state for queries
+const { leadFilters } = useFilterStore();
+const queryKey = ['leads', leadFilters];
+
+// authStore provides initiative context
+const { initiative } = useAuthStore();
 ```
 
-**Create useFilterStore** (`/packages/frontend/src/stores/filterStore.ts`)
-```typescript
-interface FilterState {
-  leads: {
-    search: string;
-    status?: string;
-    type?: string;
-    sortBy: string;
-    sortOrder: 'asc' | 'desc';
-    page: number;
-    limit: number;
-  };
-  // Actions
-  setLeadFilters: (filters: Partial<LeadFilters>) => void;
-  resetLeadFilters: () => void;
-}
+**API Endpoints Available:**
+- `GET /api/v1/leads` - List with pagination/filtering (returns `PaginatedResponse<Lead>`)
+- `GET /api/v1/leads/:id` - Single lead details (returns `Lead`)
+- `PATCH /api/v1/leads/:id` - Update lead (partial `Lead` updates)
+- `GET /api/v1/leads/stats` - Lead statistics
+
+**Backend Security:**
+- Initiative filtering is automatic (enforced by middleware)
+- Cross-initiative access returns 404
+- All queries logged with `D365_FILTER_APPLIED` events
+
+**🎯 Phase 2: Data Fetching Layer (Ready to Start):**
+
+### Phase 2: Implement Data Fetching Layer (Next Session)
+
+**Directory Structure:**
+```
+/packages/frontend/src/
+├── hooks/
+│   ├── queries/
+│   │   ├── leads/
+│   │   │   ├── useLeads.ts         # List query with filters
+│   │   │   ├── useLead.ts          # Single lead query
+│   │   │   ├── useUpdateLead.ts    # Update mutation
+│   │   │   ├── useCreateLead.ts    # Create mutation (if needed)
+│   │   │   └── index.ts            # Barrel export
+│   │   └── index.ts
+│   └── index.ts
+└── services/
+    ├── apiClient.ts                 # ✅ Already exists
+    └── queryClient.ts               # ✅ Already configured
 ```
 
-### 2. Implement Data Fetching Layer (1 day)
-**Why Second**: Bridges the gap between backend API and UI components
+**Key Implementation Requirements:**
+1. **Query Keys Factory Pattern:**
+   ```typescript
+   const leadKeys = {
+     all: ['leads'] as const,
+     lists: () => [...leadKeys.all, 'list'] as const,
+     list: (filters: LeadFilters) => [...leadKeys.lists(), filters] as const,
+     details: () => [...leadKeys.all, 'detail'] as const,
+     detail: (id: string) => [...leadKeys.details(), id] as const,
+   };
+   ```
 
-- Create custom hooks directory: `/packages/frontend/src/hooks/queries/`
-- Implement `useLeads` hook with TanStack Query
-- Implement `useLead` hook for single lead details
-- Implement `useUpdateLead` mutation
-- Add proper error handling and loading states
-- Integrate with Zustand stores for state coordination
+2. **Store Integration:**
+   - Use `filterStore` for query parameters
+   - Update `filterStore` pagination after successful queries
+   - Use `uiStore` for error toasts and modals
+   - Avoid duplicating loading states (use TanStack Query's isLoading)
 
-### 3. Build Lead Management UI (2-3 days)
-**Why Third**: Now we have all the infrastructure to build functional pages
+3. **Error Handling:**
+   - Transform API errors to user-friendly messages
+   - Show toasts for errors using `uiStore.showToast()`
+   - Handle 404s gracefully (could mean no access)
 
-**Lead List Page** (`/packages/frontend/src/pages/leads/LeadList.tsx`)
-```typescript
-// Key implementation points:
-// 1. Use TanStack Query with the existing apiClient
-// 2. API endpoint: GET /api/v1/leads
-// 3. Query params: page, limit, status, type, search, sortBy, sortOrder
-// 4. Use TanStack Table (already installed as @tanstack/react-table)
-// 5. The backend returns paginated response with filters
+4. **Type Safety:**
+   - Use types from `@partner-portal/shared`
+   - Ensure proper typing for query functions
+   - Type-safe error handling
 
-// Example query hook:
-const useLeads = (filters: LeadFilters) => {
-  return useQuery({
-    queryKey: ['leads', filters],
-    queryFn: () => apiClient.get('/v1/leads', { params: filters })
-  });
-};
+### Phase 3: Build Lead Management UI (After Phase 2)
+
+**Component Architecture:**
+```
+/packages/frontend/src/
+├── components/
+│   ├── data/
+│   │   ├── DataTable/
+│   │   │   ├── DataTable.tsx           # Generic table component
+│   │   │   ├── DataTablePagination.tsx # Pagination controls
+│   │   │   ├── DataTableToolbar.tsx    # Filters and search
+│   │   │   └── index.ts
+│   │   ├── LeadTable/
+│   │   │   ├── LeadTable.tsx           # Lead-specific table
+│   │   │   ├── columns.tsx             # Column definitions
+│   │   │   └── index.ts
+│   │   └── EmptyState.tsx              # No data component
+│   └── leads/
+│       ├── LeadCard.tsx                # Lead summary card
+│       ├── LeadForm.tsx                # Edit/create form
+│       └── LeadStatusBadge.tsx         # Status display
+├── pages/
+│   └── leads/
+│       ├── index.tsx                   # List page
+│       └── [id].tsx                    # Detail page
 ```
 
-**Lead Details Page** (`/packages/frontend/src/pages/leads/LeadDetails.tsx`)
-- Endpoint: `GET /api/v1/leads/:id`
-- Update endpoint: `PATCH /api/v1/leads/:id`
-- Display all lead fields from the Lead interface
-- Add form for status updates and notes
+**Integration Points:**
+- DataTable uses `filterStore` for state
+- LeadTable uses `useLeads` hook from Phase 2
+- Forms use React Hook Form + Zod
+- Status updates use `useUpdateLead` mutation
 
-**Key Technical Context:**
-- API client already configured at `/packages/frontend/src/services/apiClient.ts`
-- Lead types available in `@partner-portal/shared/types/lead.ts`
-- Auth headers automatically added by axios interceptor
-- Initiative filtering happens automatically on backend
-- Add routes to `/packages/frontend/src/App.tsx`
-
-**Table Components** (`/packages/frontend/src/components/data/`)
-- Implement reusable DataTable with TanStack Table
-- Add column definitions for leads
-- Implement sorting, filtering, and pagination UI
-- Create loading skeletons and empty states
-
-**Lead Pages**
-- Create `/packages/frontend/src/pages/leads/index.tsx` (list view)
-- Create `/packages/frontend/src/pages/leads/[id].tsx` (detail view)
-- Add routes to App.tsx
-- Connect to stores and API hooks
+**Key Features:**
+- URL state synchronization
+- Optimistic updates
+- Loading skeletons
+- Error boundaries
+- Responsive design
 
 ### 4. Enhance Navigation with Role-Based Links (0.5-1 day)
 
@@ -825,39 +832,49 @@ const useLeads = (filters: LeadFilters) => {
 - Create navigation configuration system
 - Test with different user roles and initiatives
 
-**Testing the Backend Implementation:**
-1. Start backend: `cd packages/backend && npm run dev`
-2. Use Postman/curl to test endpoints:
-   ```bash
-   # Get leads (requires valid JWT token)
-   curl -H "Authorization: Bearer YOUR_TOKEN" \
-        "http://localhost:3000/api/v1/leads?page=1&limit=25"
-   ```
-3. Check server logs for `D365_FILTER_APPLIED` events
-4. Verify initiative filter in D365 query logs
-
-**📊 Revised Timeline with Clear Dependencies:**
+**📊 Implementation Progress:**
 1. ✅ Backend Infrastructure: COMPLETE
    - D365 filter middleware ✓
    - Lead management API ✓
    - Authentication & security ✓
 
-2. 🔨 Frontend Implementation (4.5-6 days total):
-   - Day 1: State management foundation (stores)
-   - Day 2: Data fetching layer (TanStack Query hooks)
-   - Days 3-5: Lead management UI (tables, pages, forms)
-   - Day 5.5-6: Navigation enhancement (role-based menus)
+2. ✅ Phase 1 - State Management: COMPLETE
+   - uiStore (loading, modals, toasts) ✓
+   - filterStore (search, filters, pagination) ✓
+   - Store utilities and types ✓
 
-**Critical Success Factors:**
-- Complete each phase before moving to the next
-- Test infrastructure components thoroughly
-- Avoid shortcuts that create technical debt
+3. 🎯 Phase 2 - Data Fetching: READY TO START
+   - TanStack Query hooks for leads
+   - Error handling integration
+   - Store synchronization
 
-**🔒 Security Notes:**
-- Initiative filtering is enforced at the service layer, not just middleware
-- Cross-initiative lead access returns 404 (not 403) to avoid information leakage
-- All D365 queries are logged with applied filters for audit trail
-- OData injection prevention via `escapeODataString()` method -->
+4. ⏳ Phase 3 - Lead Management UI: PENDING
+   - Reusable table components
+   - Lead pages (list/detail)
+   - Form integration
+
+5. ⏳ Phase 4 - Navigation Enhancement: PENDING
+   - Role-based menu items
+   - Initiative-specific routes
+
+**🔧 Technical Debt & Considerations:**
+- ESLint configuration needs fixing (known issue with @typescript-eslint)
+- Consider implementing React Error Boundaries before Phase 3
+- Plan for loading skeleton components
+- Design empty states for better UX
+
+**🔒 Security Reminders:**
+- Never store sensitive data in Zustand stores
+- Initiative filtering is enforced server-side
+- 404 responses for unauthorized access (not 403)
+- All API calls include JWT automatically
+
+**💡 Tips for Next Session:**
+1. Start with query keys factory pattern
+2. Test error scenarios early
+3. Use React Query DevTools for debugging
+4. Keep loading states in TanStack Query, not Zustand
+5. Remember pagination updates after successful queries
 
 ---
 
