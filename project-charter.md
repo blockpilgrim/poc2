@@ -722,7 +722,7 @@ The goal is to successfully **display a list of the correct `tc_everychildlead` 
     * The `$select` on the base query should include `tc_name`, `tc_ecleadlifecyclestatus`, the "Engagement Interest" field (e.g., `tc_engagementinterest`), `tc_leadscore2`, `createdon`, and `modifiedon`.
 
 3.  **Implement Correct Filtering Logic (`buildSecureODataFilter`):**
-    * Before building the filter, fetch the user's `Account` record using their `initiativeFilter.organizationId` to retrieve the `tc_organizationleadtype` string.
+    * **IMPORTANT**: The `tc_organizationleadtype` is already available in the JWT. During login, `d365Service.getUserOrganization` fetches this field from the D365 Account entity and includes it in the user's JWT claims. Access it via `req.user.organization.organizationLeadType` - no additional D365 lookup needed.
     * Your filter must include three primary conditions joined by `and`:
         * `statecode eq 0` (to fetch only active leads).
         * `_tc_initiative_value eq '{user-initiative-id}'` (to enforce the initiative boundary).
@@ -735,7 +735,14 @@ The goal is to successfully **display a list of the correct `tc_everychildlead` 
     * Implement mapping for Option Sets:
         * Create an internal helper to map the `tc_ecleadlifecyclestatus` integer (e.g., `948010002`) to its string representation (e.g., `"assigned"`).
         * Create a helper to infer the `LeadType` ('foster' or 'volunteer') based on the "Engagement Interest" field's integer values. Prioritize 'foster' if both are present.
+        * **Note**: The 'other' status serves as a fallback for any unmapped status values, ensuring system stability.
     * Map the expanded data correctly: `subjectName` should come from `d365Lead.tc_contact.fullname` and `leadOwnerName` from `d365Lead.tc_leadowner.fullname`.
+    * **Error Handling**: Use optional chaining (`?.`) when accessing expanded lookups to handle null references gracefully (e.g., `d365Lead.tc_contact?.fullname`).
+
+**Additional Implementation Notes:**
+- **Option Set Mappings**: Create a new file `packages/backend/src/constants/d365-mappings.ts` to centralize all D365 integer-to-string mappings (e.g., `LEAD_STATUS_MAP`, `LEAD_TYPE_MAP`).
+- **Performance**: The existing pagination limit (100 records max) provides sufficient protection against timeout issues despite the additional `$expand` operations.
+- **Organization Type Caching**: The `tc_organizationleadtype` is cached in the JWT for its 15-minute lifespan, eliminating repeated D365 lookups.
 
 #### **Step 2: Shared Package (`packages/shared`) - The Data Contract**
 
@@ -759,6 +766,10 @@ The goal is to successfully **display a list of the correct `tc_everychildlead` 
       // Internal user who owns the lead within the partner organization (from tc_leadowner lookup).
       leadOwnerName?: string;
 
+      // Organization assignment info (populated from user's JWT organization data)
+      assignedOrganizationId: string;
+      assignedOrganizationName: string;
+
       // Mapped status and type fields for clear UI display.
       status: LeadStatus;
       type: LeadType;
@@ -780,22 +791,50 @@ The goal is to successfully **display a list of the correct `tc_everychildlead` 
     // ... rest of file (LeadFilters etc. can remain for now)
     ```
 
-#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI**
+**Note**: The organization fields (`assignedOrganizationId`, `assignedOrganizationName`) are populated from the user's JWT organization data, not from D365. This provides valuable UI context and supports future network-wide views.
 
-1.  **Update Table Columns:**
-    * **File:** `src/components/data/LeadTable/columns.tsx`
-    * Adapt the `ColumnDef` array to use the new properties from the updated `Lead` type.
-    * For the primary "Name" column, display both the subject's name (`row.original.subjectName`) and the lead's title (`row.original.name`) to provide full context.
-    * Add a new column for the "Lead Owner" (`row.original.leadOwnerName`).
-    * Ensure the `email` and other contact-related cells now pull from the new `subject...` properties.
+#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI and State**
 
-2.  **Update Mobile Card View:**
-    * **File:** `src/components/leads/LeadCard.tsx`
-    * Update the card layout to display the new lead properties (`lead.name`, `lead.subjectName`, etc.).
+This step involves refactoring the state management for filters, updating the data fetching hook, and adapting the UI components to the new `Lead` data model.
 
-3.  **Temporarily Disable Non-Functional Filters:**
-    * **File:** `src/components/data/LeadTable/LeadTableFilters.tsx`
-    * To prevent a confusing UI, comment out or remove the `<Select>` components for "Status", "Type", and "Priority". This aligns with the POC goal to focus on displaying data correctly before re-implementing frontend filtering logic. The "Search" bar can remain but will be non-functional until explicitly addressed in a later phase.
+**A. Refactor State Management (`filterStore.ts`)**
+
+* **Goal:** Remove all state and actions related to the now-obsolete Status, Type, and Priority filters.
+* **File:** `packages/frontend/src/stores/filterStore.ts`
+* **Actions:**
+    1.  **Modify `LeadFilters` Interface:** Remove the `status`, `type`, and `priority` properties.
+    2.  **Remove Setter Actions:** Delete the `setLeadStatus`, `setLeadType`, and `setLeadPriority` functions entirely.
+    3.  **Update `resetLeadFilters`:** Simplify this function by removing the logic that resets the obsolete filters.
+    4.  **Update `useHasActiveFilters`:** Refactor the logic inside this selector to remove the checks for `filters.status`, `filters.type`, and `filters.priority`.
+    5.  **Update `getLeadFiltersFromURL`:** Remove the lines that parse `status`, `type`, and `priority` from `URLSearchParams`.
+
+**B. Refactor Data Fetching Hook (`useLeads.ts`)**
+
+* **Goal:** Stop the `useLeads` hook from sending the obsolete filter parameters to the backend.
+* **File:** `packages/frontend/src/hooks/queries/leads/useLeads.ts`
+* **Actions:**
+    1.  In the `queryFn`, locate the `params` object being sent to the `api.get` call.
+    2.  Delete the lines that pass `status`, `type`, and `priority`. The API call should no longer include these parameters.
+
+**C. Adapt UI Components**
+
+* **Goal:** Update the table and card components to display data from the new `Lead` object and remove the now-defunct filter UI.
+* **Actions:**
+    1.  **Update Table Columns:**
+        * **File:** `src/components/data/LeadTable/columns.tsx`
+        * Adapt the `ColumnDef` array to use the new properties from the updated `Lead` type.
+        * For the primary "Name" column, display both the subject's name (`row.original.subjectName`) and the lead's title (`row.original.name`) to provide full context.
+        * Add a new column to display the "Lead Owner" (`row.original.leadOwnerName`).
+        * Ensure the `email` and other contact-related cells now pull data from the new `subject...` properties.
+
+    2.  **Update Mobile Card View:**
+        * **File:** `src/components/leads/LeadCard.tsx`
+        * Update the card layout to display the new lead properties (`lead.name`, `lead.subjectName`, etc.), ensuring it provides a clear and useful summary on smaller screens.
+
+    3.  **Remove Obsolete Filter UI:**
+        * **File:** `src/components/data/LeadTable/LeadTableFilters.tsx`
+        * Remove the `<Select>` components and their container logic for "Status", "Type", and "Priority".
+        * The component should now only contain the search input and the logic to reset the search. The `hasFilters` check should be simplified to only account for the search term.
 
 ---
 
