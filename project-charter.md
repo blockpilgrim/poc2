@@ -680,122 +680,122 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** MVP Stage Core Features - Phase 3 COMPLETE ✅ → Phase 4: Forms & Create/Edit Functionality
+**Phase:** Foundational Refactoring - Lead Data Source Realignment
 
-**Status:** Phase 3 Lead Management UI is COMPLETE!
+**Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity. This is a critical realignment to ensure the portal displays the correct data assigned to partner organizations.
 
-**✅ Phase 1 Completed (State Management):**
-- ✅ Zustand stores: authStore, uiStore, filterStore
-- ✅ Comprehensive state management patterns documented
+**Background & Problem Statement:**
+The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. The current implementation, therefore, fetches and displays the wrong data. This phase will address this foundational issue by refactoring the backend services, shared types, and frontend components to use `tc_everychildlead` as the single source of truth for leads.
 
-**✅ Phase 2 Completed (Data Fetching):**
-- ✅ TanStack Query hooks for all CRUD operations
-- ✅ Automatic filter integration with filterStore
-- ✅ Optimistic updates and error handling
+---
 
-**✅ Phase 3 Completed (Lead Management UI):**
-- ✅ **Generic DataTable Component**:
-  - Reusable table with sorting, pagination, row selection
-  - Keyboard navigation and accessibility features
-  - Loading skeletons and empty states
-- ✅ **Lead-Specific Components**:
-  - LeadTable with automatic filter integration
-  - Status/Type/Priority badges and indicators
-  - Mobile-friendly LeadCard component
-- ✅ **Lead Pages**:
-  - `/leads` - List page with filters and search
-  - `/leads/:id` - Detail page with full information
-- ✅ **Quality Improvements**:
-  - Fixed navigation to use React Router consistently
-  - Added comprehensive accessibility (ARIA labels, keyboard nav)
-  - Removed all TypeScript `any` types
-  - Optimized re-renders in pagination
-- ✅ **Documentation**:
-  - Lead Management UI guide
-  - Data Table Pattern guide
-  - Quick Reference for common tasks
+### Executive Summary of the Refined Strategy
 
-**🏗️ Infrastructure Ready for Phase 4:**
-- React Hook Form + Zod ready for validation
-- Create/Update mutations already implemented
-- Dialog component available for modals
-- Error handling shows toasts automatically
+The core of this plan is to modify the backend's `lead.service.ts` to become a robust data aggregation and transformation layer. It will not just fetch `tc_everychildlead` records; it will construct a complete, UI-friendly `Lead` object by:
 
-**🎯 Phase 4: Forms & Create/Edit Functionality (Ready to Start):**
+1.  **Querying `tc_everychildlead`** as the base entity.
+2.  **Expanding to the related `Contact`** (`tc_contact`) to retrieve the lead subject's name and contact information, preserving the integrity of the existing UI components.
+3.  **Expanding to the owning `Contact`** (`tc_leadowner`) to display the internal owner of the lead.
+4.  **Implementing precise assignment logic** based on the user's organization type (`tc_organizationleadtype`).
+5.  **Transforming D365 option set integers** into the meaningful string literals required by the frontend.
 
-### Recommended Implementation Order:
+This approach ensures the frontend receives a clean, consistent data structure, minimizing its complexity and adhering to our architectural principle of a smart backend and a leaner frontend.
 
-1. **Lead Form Component** (`/components/leads/LeadForm.tsx`):
-   - Use React Hook Form with Zod schema
-   - Support both create and edit modes
-   - Field validation with error messages
-   - Initiative is set automatically (don't show in form)
+---
 
-2. **Create Lead Flow**:
-   - "New Lead" button already in place
-   - Open form in Dialog/Modal
-   - Use `useCreateLead()` mutation
-   - Close dialog and refresh list on success
+### Implementation Plan
 
-3. **Edit Lead Flow**:
-   - "Edit" button on detail page
-   - Pre-populate form with existing data
-   - Use `useUpdateLead()` mutation
-   - Optimistic updates already configured
+The goal is to successfully **display a list of the correct `tc_everychildlead` records** assigned to a user's organization. Create/Update/Delete operations and frontend filtering are deferred.
 
-4. **Form Fields to Include**:
-   - Basic: firstName, lastName, email, phoneNumber
-   - Lead Info: status, type, priority, source
-   - Assignment: assignedToId, assignedOrganizationId
-   - Notes: Rich text or textarea
+#### **Step 1: Backend (`packages/backend`) - The Core Refactoring**
 
-**🔧 Key Implementation Tips:**
+**File to Modify: `services/lead.service.ts`**
 
-```typescript
-// Form schema example
-const leadSchema = z.object({
-  firstName: z.string().min(1, "Required"),
-  lastName: z.string().min(1, "Required"),
-  email: z.string().email().optional(),
-  status: z.enum(['new', 'contacted', ...]),
-  // etc.
-})
+1.  **Securely Handle Missing Organization ID:**
+    * Modify the `getLeads` function to adopt a "fail-secure" approach.
+    * If `initiativeFilter.organizationId` is missing from the request context, the service must immediately return an empty result (`{ value: [], totalCount: 0 }`).
+    * **Do not** proceed with a query that omits the organization filter. This prevents data leakage and upholds the **Security** principle.
 
-// Use existing mutations
-const { mutate: createLead } = useCreateLead()
-const { mutate: updateLead } = useUpdateLead()
-```
+2.  **Construct the D365 Web API Query:**
+    * In the `getLeads` function, change the target entity in the D365 API URL from `/contacts` to `/tc_everychildleads`.
+    * The query must `$expand` the necessary lookups to fetch related data in a single call: `$expand=tc_contact($select=fullname,emailaddress1),tc_leadowner($select=fullname)`.
+    * The `$select` on the base query should include `tc_name`, `tc_ecleadlifecyclestatus`, the "Engagement Interest" field (e.g., `tc_engagementinterest`), `tc_leadscore2`, `createdon`, and `modifiedon`.
 
-**⚠️ Important Reminders:**
-- DON'T add initiative field to forms (set server-side)
-- DON'T manage loading states (handled by mutations)
-- DON'T handle errors manually (toasts appear automatically)
-- DO use the Dialog component for modal forms
-- DO validate on blur for better UX
+3.  **Implement Correct Filtering Logic (`buildSecureODataFilter`):**
+    * Before building the filter, fetch the user's `Account` record using their `initiativeFilter.organizationId` to retrieve the `tc_organizationleadtype` string.
+    * Your filter must include three primary conditions joined by `and`:
+        * `statecode eq 0` (to fetch only active leads).
+        * `_tc_initiative_value eq '{user-initiative-id}'` (to enforce the initiative boundary).
+        * An organization assignment block using `or` logic:
+            * If `tc_organizationleadtype` contains `"948010000"` (Foster), include the condition: `_tc_fosterorganization_value eq '{user-account-id}'`.
+            * If `tc_organizationleadtype` contains `"948010001"` (Volunteer), include the condition: `tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '{user-account-id}')`.
 
-**🔍 Reference Implementation:**
-- Check `/pages/profile/Profile.tsx` for form patterns
-- Review mutation hooks in `/hooks/queries/leads/`
-- See Zod schemas in `@partner-portal/shared`
+4.  **Rewrite the Data Mapping Logic (`mapD365ToLead`):**
+    * This function must be updated to accept a `tc_everychildlead` object from the API response.
+    * Implement mapping for Option Sets:
+        * Create an internal helper to map the `tc_ecleadlifecyclestatus` integer (e.g., `948010002`) to its string representation (e.g., `"assigned"`).
+        * Create a helper to infer the `LeadType` ('foster' or 'volunteer') based on the "Engagement Interest" field's integer values. Prioritize 'foster' if both are present.
+    * Map the expanded data correctly: `subjectName` should come from `d365Lead.tc_contact.fullname` and `leadOwnerName` from `d365Lead.tc_leadowner.fullname`.
 
-**📋 Next Phases After Forms:**
-- Phase 5: Dashboard with statistics (useLeadStats ready)
-- Phase 6: Bulk operations UI
-- Phase 7: Advanced filtering and search
-- Phase 8: Testing suite implementation
+#### **Step 2: Shared Package (`packages/shared`) - The Data Contract**
 
-**🛠️ Technical Debt to Address:**
-- ESLint configuration issues with TypeScript
-- Consider adding React Error Boundaries
-- Performance optimization for large datasets
-- Multi-tab state synchronization
+**File to Modify: `src/types/lead.ts`**
 
-**💡 Quick Wins for Next Session:**
-1. Start with a simple form in a Dialog
-2. Reuse validation from shared types
-3. Test create flow end-to-end first
-4. Add edit capability to detail page
-5. Consider inline editing for status/priority
+1.  **Update the `Lead` Interface:** Replace the existing `Lead` interface with the new, accurate structure. This is the contract between the backend and frontend.
+
+    ```typescript
+    /**
+     * Represents a tc_everychildlead from D365, transformed and enriched for portal use.
+     * This is the central "Lead" object for the application.
+     */
+    export interface Lead {
+      id: string; // The GUID of the tc_everychildlead record.
+      name: string; // The title of the lead from tc_name.
+
+      // Information about the person who is the subject of the lead (from tc_contact lookup).
+      subjectName?: string;
+      subjectEmail?: string;
+
+      // Internal user who owns the lead within the partner organization (from tc_leadowner lookup).
+      leadOwnerName?: string;
+
+      // Mapped status and type fields for clear UI display.
+      status: LeadStatus;
+      type: LeadType;
+
+      // Raw score for future UI implementation.
+      leadScore?: number; // from tc_leadscore2
+
+      initiativeId: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }
+
+    // The defined set of statuses the frontend will work with.
+    export type LeadStatus = 'assigned' | 'in-progress' | 'certified' | 'on-hold' | 'closed' | 'other';
+
+    // The defined set of types the frontend will work with.
+    export type LeadType = 'foster' | 'volunteer' | 'other';
+
+    // ... rest of file (LeadFilters etc. can remain for now)
+    ```
+
+#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI**
+
+1.  **Update Table Columns:**
+    * **File:** `src/components/data/LeadTable/columns.tsx`
+    * Adapt the `ColumnDef` array to use the new properties from the updated `Lead` type.
+    * For the primary "Name" column, display both the subject's name (`row.original.subjectName`) and the lead's title (`row.original.name`) to provide full context.
+    * Add a new column for the "Lead Owner" (`row.original.leadOwnerName`).
+    * Ensure the `email` and other contact-related cells now pull from the new `subject...` properties.
+
+2.  **Update Mobile Card View:**
+    * **File:** `src/components/leads/LeadCard.tsx`
+    * Update the card layout to display the new lead properties (`lead.name`, `lead.subjectName`, etc.).
+
+3.  **Temporarily Disable Non-Functional Filters:**
+    * **File:** `src/components/data/LeadTable/LeadTableFilters.tsx`
+    * To prevent a confusing UI, comment out or remove the `<Select>` components for "Status", "Type", and "Priority". This aligns with the POC goal to focus on displaying data correctly before re-implementing frontend filtering logic. The "Search" bar can remain but will be non-functional until explicitly addressed in a later phase.
 
 ---
 
