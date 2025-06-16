@@ -11,6 +11,8 @@ import { authService } from './services/authService'
 import { ThemeProvider } from './providers/ThemeProvider'
 import { Header } from './components/layout/Header'
 import { ProfilePage } from './pages/profile/Profile'
+import LeadsPage from './pages/leads'
+import LeadDetailPage from './pages/leads/[id]'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +53,8 @@ function AppContent() {
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/leads/:id" element={<LeadDetailPage />} />
             {/* Add more protected routes here */}
           </Route>
         </Routes>

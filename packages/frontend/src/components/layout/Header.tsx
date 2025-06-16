@@ -52,6 +52,20 @@ export function Header() {
         <div className="flex items-center gap-4">
           {isAuthenticated && user ? (
             <>
+              <nav className="flex items-center gap-4 mr-4">
+                <Link
+                  to="/"
+                  className="text-sm font-medium transition-colors hover:text-primary"
+                >
+                  Home
+                </Link>
+                <Link
+                  to="/leads"
+                  className="text-sm font-medium transition-colors hover:text-primary"
+                >
+                  Leads
+                </Link>
+              </nav>
               <Link 
                 to="/profile" 
                 className="transition-transform hover:scale-105"
