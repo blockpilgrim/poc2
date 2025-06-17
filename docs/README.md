@@ -8,6 +8,8 @@
 ## Core Concepts
 
 ### Architecture & Patterns
+- **[Shared Types Architecture](./shared-types-architecture.md)** - Type system design and principles
+- **[Shared Types Quick Reference](./shared-types-quick-reference.md)** - Common types and patterns
 - **[State Management](./state-management.md)** - Comprehensive guide to Zustand stores
 - **[State Management Patterns](./state-management-patterns.md)** - Advanced patterns and best practices
 - **[Data Fetching](./data-fetching.md)** - TanStack Query implementation
@@ -33,6 +35,10 @@
 ## Documentation Structure
 
 ### For New Team Members
+
+#### All Developers
+1. **Start here:** **[Shared Types Architecture](./shared-types-architecture.md)** - Understanding the type system
+2. Bookmark **[Shared Types Quick Reference](./shared-types-quick-reference.md)** for daily use
 
 #### Frontend Developers
 1. Start with **[Lead Management UI](./lead-management-ui.md)** for a complete feature example

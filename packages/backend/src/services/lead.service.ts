@@ -7,7 +7,7 @@ import type {
   D365QueryOptions, 
   D365QueryResult
 } from '../types/d365.types';
-import type { Lead, LeadFilters } from '@partner-portal/shared';
+import type { Lead, LeadFilters, LeadStatus, LeadType } from '@partner-portal/shared';
 import { 
   D365_LEAD_FIELDS,
   ORGANIZATION_LEAD_TYPE,
@@ -191,10 +191,6 @@ export class LeadService {
     d365Lead: D365EveryChildLead,
     userOrganization?: { id: string; name: string }
   ): Lead {
-    // Map tc_everychildlead to existing Lead interface
-    // This is a temporary mapping until Step 2 updates the shared types
-    const [firstName = '', lastName = ''] = (d365Lead.tc_contact?.fullname || '').split(' ', 2);
-    
     // Note: We keep the application initiative ID (e.g., 'ec-oregon') in the Lead object
     // rather than the D365 GUID for consistency with the rest of the application
     const initiativeId = getInitiativeIdFromGuid(d365Lead._tc_initiative_value || '');
@@ -208,31 +204,29 @@ export class LeadService {
     
     return {
       id: d365Lead.tc_everychildleadid,
-      d365Id: d365Lead.tc_everychildleadid,
-      initiativeId: initiativeId || '',
+      name: d365Lead.tc_name || '',
       
-      // Contact Information (from expanded tc_contact)
-      firstName,
-      lastName,
-      displayName: d365Lead.tc_contact?.fullname || d365Lead.tc_name || '',
-      email: d365Lead.tc_contact?.emailaddress1,
+      // Subject information from expanded tc_contact
+      subjectName: d365Lead.tc_contact?.fullname,
+      subjectEmail: d365Lead.tc_contact?.emailaddress1,
+      
+      // Lead owner from expanded tc_leadowner
+      leadOwnerName: d365Lead.tc_leadowner?.fullname,
       
       // Lead Details
-      status: mapLeadStatus(d365Lead.tc_ecleadlifecyclestatus) as any,
-      type: mapLeadType(d365Lead.tc_engagementinterest) as any,
+      status: mapLeadStatus(d365Lead.tc_ecleadlifecyclestatus) as LeadStatus,
+      type: mapLeadType(d365Lead.tc_engagementinterest) as LeadType,
+      leadScore: d365Lead.tc_leadscore2,
       
-      // Assignment
+      // Organization assignment from JWT context
       assignedOrganizationId: userOrganization?.id,
       assignedOrganizationName: userOrganization?.name,
-      assignedToName: d365Lead.tc_leadowner?.fullname,
       
-      // Metadata
-      notes: `Lead: ${d365Lead.tc_name}${d365Lead.tc_leadscore2 ? ` (Score: ${d365Lead.tc_leadscore2})` : ''}`,
-      
-      // Timestamps
+      // Initiative and timestamps
+      initiativeId: initiativeId || '',
       createdAt: new Date(d365Lead.createdon),
       updatedAt: new Date(d365Lead.modifiedon)
-    } as Lead;
+    };
   }
   
   /**

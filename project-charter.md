@@ -240,6 +240,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Document state management patterns and conventions (Complete - docs/state-management*.md files created)
 - [x] Document backend architecture and API patterns (Complete - backend-architecture.md, backend-api-reference.md)
 - [x] Document D365 integration patterns (Complete - d365-integration-guide.md, backend-troubleshooting.md)
+- [x] Document shared types architecture (Complete - shared-types-architecture.md, shared-types-quick-reference.md)
 
 #### Basic Deployment & Monitoring
 - [ ] Configure Vite production builds
@@ -399,6 +400,8 @@ poc-portal-2/
 │
 ├── docs/
 │   ├── README.md               # Documentation index and guide
+│   ├── shared-types-architecture.md # Type system design principles
+│   ├── shared-types-quick-reference.md # Common types and patterns
 │   ├── state-management.md     # State patterns documentation
 │   ├── state-management-patterns.md # Advanced state patterns
 │   ├── state-management-quick-reference.md # Quick reference
@@ -419,7 +422,8 @@ poc-portal-2/
 │
 │   Key implementation docs:
 │   ├── backend/src/services/GUID-MAPPING-IMPLEMENTATION.md
-│   └── backend/LEAD-SERVICE-REFACTORING-STEP1.md
+│   ├── backend/LEAD-SERVICE-REFACTORING-STEP1.md
+│   └── backend/BREAKING-CHANGES-STEP2.md
 ├── docker-compose.yml          # Local development setup
 └── azure-pipelines.yml         # CI/CD configuration
 ```
@@ -647,6 +651,8 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 **Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity, while ensuring proper initiative GUID mapping for D365 queries.
 
+**Latest Update (Step 2 Complete):** The shared types have been updated to match the tc_everychildlead entity structure. This introduces breaking changes to the API response format. The backend is fully functional with the new types, but the frontend will not compile until Step 3 is implemented. See `BREAKING-CHANGES-STEP2.md` for details.
+
 **Background & Problem Statement:**
 
 The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. Additionally, during Step 1 implementation, we discovered that the `_tc_initiative_value` field in D365 expects Initiative entity GUIDs (e.g., `b6ced3de-2993-ed11-aad1-6045bd006a3a` for EC Oregon), not the application's string identifiers (e.g., `ec-oregon`).
@@ -663,7 +669,7 @@ The core of this plan is to modify the backend's `lead.service.ts` to become a r
 
 This approach ensures the frontend receives a clean, consistent data structure, minimizing its complexity and adhering to our architectural principle of a smart backend and a leaner frontend.
 
-**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Initiative GUID Mapping ✅ COMPLETE | Step 2 Shared Types → IN PROGRESS | Step 3 Frontend → PENDING
+**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Initiative GUID Mapping ✅ COMPLETE | Step 2 Shared Types ✅ COMPLETE | Step 3 Frontend → PENDING
 
 ---
 
@@ -756,75 +762,107 @@ This approach ensures the frontend receives a clean, consistent data structure, 
 
 ---
 
-#### Step 2: Shared Package (`packages/shared`) - The Data Contract
+#### Step 2 Completion Summary (Shared Types Update) ✅
 
-**File to Modify: `src/types/lead.ts`**
+**What Was Completed:**
+1. **Lead Interface Updated** (`packages/shared/src/types/lead.ts`)
+   - Removed Contact-based fields (firstName, lastName, address, phoneNumber, etc.)
+   - Added tc_everychildlead fields: `name`, `subjectName`, `subjectEmail`, `leadOwnerName`, `leadScore`
+   - Aligned with D365 entity structure for clarity and correctness
 
-1.  **Update the `Lead` Interface:** Replace the existing `Lead` interface with the new, accurate structure. This is the contract between the backend and frontend.
+2. **Type Enums Updated**
+   - `LeadStatus`: 'assigned' | 'in-progress' | 'certified' | 'on-hold' | 'closed' | 'other'
+   - `LeadType`: 'foster' | 'volunteer' | 'other'
+   - Now matches D365 option set mappings exactly
 
-    ```typescript
-    /**
-     * Represents a tc_everychildlead from D365, transformed and enriched for portal use.
-     * This is the central "Lead" object for the application.
-     */
-    export interface Lead {
-      id: string; // The GUID of the tc_everychildlead record.
-      name: string; // The title of the lead from tc_name.
+3. **LeadFilters Simplified**
+   - Removed unimplemented filters (status, type, priority, tags, etc.)
+   - Only `search` remains (inherited from FilterParams)
+   - Documented that most filtering happens server-side via JWT claims
 
-      // Information about the person who is the subject of the lead (from tc_contact lookup).
-      subjectName?: string;
-      subjectEmail?: string;
+4. **Backend Cleanup**
+   - Removed type-casting workarounds (`as any`) in `mapD365ToLead`
+   - Updated lead controller to remove obsolete filter handling
+   - Added deprecation notice to obsolete D365Lead interface
+   - All backend tests passing with new types
 
-      // Internal user who owns the lead within the partner organization (from tc_leadowner lookup).
-      leadOwnerName?: string;
+5. **Documentation Created**
+   - `BREAKING-CHANGES-STEP2.md` - Comprehensive list of API changes
+   - `docs/shared-types-architecture.md` - Type system design principles
+   - `docs/shared-types-quick-reference.md` - Daily reference guide
+   - Updated docs index to include shared types as foundational reading
 
-      // Organization assignment info (populated from user's JWT organization data)
-      assignedOrganizationId: string;
-      assignedOrganizationName: string;
+**Key Breaking Changes:**
+- **CRITICAL**: Frontend will NOT build until Step 3 is complete
+- API response structure completely changed (see BREAKING-CHANGES-STEP2.md)
+- Many Lead properties removed or renamed
+- Status/Type enum values completely different
+- No backward compatibility maintained
 
-      // Mapped status and type fields for clear UI display.
-      status: LeadStatus;
-      type: LeadType;
+#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI and State** (NEXT STEPS)
 
-      // Raw score for future UI implementation.
-      leadScore?: number; // from tc_leadscore2
+**Critical Context for Implementation:**
+The frontend currently expects the old Lead interface structure and will NOT compile. The build errors in `npm run build:frontend` provide a complete list of all locations that need updating. Key files with errors:
+- `src/components/data/LeadTable/columns.tsx` - Table columns reference old fields
+- `src/components/leads/LeadCard.tsx` - Mobile card uses old fields
+- `src/components/leads/LeadStatusBadge.tsx` - Has old status values
+- `src/components/leads/LeadTypeBadge.tsx` - Has old type values
+- `src/pages/leads/[id].tsx` - Detail page uses many old fields
+- `src/hooks/queries/leads/useLeads.ts` - Passes obsolete filters
 
-      initiativeId: string;
-      createdAt: Date;
-      updatedAt: Date;
-    }
+**A. Update Components to Use New Lead Properties**
+1. **Table Columns** (`LeadTable/columns.tsx`):
+   - Replace `email` → `subjectEmail`
+   - Replace `phoneNumber` → Remove (not available)
+   - Replace `displayName` → `name` or `subjectName` depending on context
 
-    // The defined set of statuses the frontend will work with.
-    export type LeadStatus = 'assigned' | 'in-progress' | 'certified' | 'on-hold' | 'closed' | 'other';
+2. **Lead Cards** (`LeadCard.tsx`):
+   - Replace `displayName` → `name` (for lead title)
+   - Replace `email` → `subjectEmail`
+   - Remove `phoneNumber` and `priority` fields
 
-    // The defined set of types the frontend will work with.
-    export type LeadType = 'foster' | 'volunteer' | 'other';
+3. **Lead Detail Page** (`pages/leads/[id].tsx`):
+   - Replace `firstName`/`lastName` → `subjectName`
+   - Replace `email` → `subjectEmail`
+   - Replace `assignedToName` → `leadOwnerName`
+   - Remove address, phoneNumber, source, notes, tags sections
+   - Remove lastContactedAt, assignedAt fields
 
-    // ... rest of file (LeadFilters etc. can remain for now)
-    ```
+**B. Update Status/Type Badges**
+1. **LeadStatusBadge** - Update status mappings:
+   - Remove: 'new', 'contacted', 'qualified', etc.
+   - Add: 'assigned', 'in-progress', 'certified', 'on-hold', 'closed', 'other'
 
-**Note**: The organization fields (`assignedOrganizationId`, `assignedOrganizationName`) are populated from the user's JWT organization data, not from D365. This provides valuable UI context and supports future network-wide views.
+2. **LeadTypeBadge** - Update type mappings:
+   - Remove all except: 'foster', 'volunteer', 'other'
 
-**Note on Lead Interface Compatibility:**
-The backend currently maps `tc_everychildlead` to the existing `Lead` interface structure to maintain compatibility. This includes:
-- Splitting `tc_contact.fullname` into `firstName` and `lastName`
-- Using `displayName` for the lead subject's name
-- Placing lead title (`tc_name`) in the notes field temporarily
-- Type-casting status/type values with `as any` until proper enums are defined
+**C. Simplify Filtering**
+1. **Remove Filter UI Elements**:
+   - Status filter dropdown
+   - Type filter dropdown
+   - Priority filter
+   - Any other obsolete filters
 
-#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI and State**
+2. **Update Filter Store**:
+   - Remove obsolete filter state and actions
+   - Keep only search functionality
 
-**A. Refactor State Management (`filterStore.ts`)**
-* Remove `status`, `type`, and `priority` from `LeadFilters` interface and all related actions
-* Update `resetLeadFilters`, `useHasActiveFilters`, and `getLeadFiltersFromURL`
+**D. Consider UX Implications**
+1. **Lost Information**:
+   - Phone numbers are no longer available
+   - Addresses are no longer available
+   - Decide if these need alternative solutions
 
-**B. Refactor Data Fetching Hook (`useLeads.ts`)**
-* Remove obsolete filter parameters from API calls
+2. **New Information**:
+   - `leadScore` is now available - consider displaying
+   - `leadOwnerName` replaces assignedToName
 
-**C. Adapt UI Components**
-* Update table columns to use new Lead properties
-* Update mobile card view for new data structure
-* Remove filter UI for status, type, and priority
+**Testing Strategy:**
+1. Start with `npm run build:frontend` to see all type errors
+2. Fix components one at a time
+3. Run `npm run dev` to test UI functionality
+4. Verify search still works
+5. Test with different lead statuses/types
 
 ---
 
@@ -854,11 +892,12 @@ The backend currently maps `tc_everychildlead` to the existing `Lead` interface 
    - Update `initiatives.config.ts` with real GUIDs
    - Test queries return correct data for each initiative
 
-5. **Step 2 Focus (Shared Types Update):**
-   - Update the `Lead` interface in `packages/shared/src/types/lead.ts`
-   - Remove obsolete fields (firstName, lastName, priority, etc.)
-   - Add new fields from tc_everychildlead entity
-   - Update LeadStatus and LeadType enums to match D365 mappings
-   - Ensure type changes are backward compatible where possible
+5. **Step 3 Preparation Notes:**
+   - **IMPORTANT**: Frontend will NOT build until Step 3 is complete
+   - Review `BREAKING-CHANGES-STEP2.md` for complete list of API changes
+   - Use `npm run build:frontend` errors as a checklist of files to update
+   - Consider UX implications of lost fields (phone, address)
+   - Opportunity to improve UI with new fields (leadScore, clearer naming)
+   - All filtering except search must be removed from UI
 
 *This charter represents a strategic exploration of decoupled architecture with multi-state initiative support. The initiative-based security model is non-negotiable and must be implemented from day one.*

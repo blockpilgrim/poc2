@@ -271,7 +271,7 @@ export class InitiativeMappingService {
     
     // Check GUIDs first
     for (const group of groups) {
-      if (group.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      if (this.isValidGuid(group)) {
         const guidMapping = this.guidToInitiative.get(group.toLowerCase());
         if (guidMapping && guidMapping.role) {
           // Handle comma-separated roles like "Foster-Partner,Volunteer"

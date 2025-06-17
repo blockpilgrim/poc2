@@ -100,8 +100,13 @@ export interface D365QueryResult<T> {
 }
 
 /**
- * D365 Lead entity mapping
- * Maps D365 contact fields to our Lead interface
+ * D365 Lead entity mapping - OBSOLETE
+ * @deprecated This interface mapped to the old Contact-based approach.
+ * The application now uses tc_everychildlead entity.
+ * See lead.service.ts for the D365EveryChildLead interface.
+ * 
+ * This interface is kept temporarily for reference but should be removed
+ * once all migrations are complete.
  */
 export interface D365Lead {
   contactid: string;

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { leadService } from '../services/lead.service';
 import { AppError } from '../utils/errors';
-import type { LeadFilters, LeadStatus, LeadType } from '@partner-portal/shared';
+import type { LeadFilters } from '@partner-portal/shared';
 import type { D365QueryOptions } from '../types/d365.types';
 
 /**
@@ -37,32 +37,8 @@ export class LeadController {
       const limit = Math.min(parseInt(req.query.limit as string) || 25, 100);
       const offset = (page - 1) * limit;
       
-      // Build filters
+      // Build filters - currently only search is supported
       const filters: LeadFilters = {};
-      
-      if (req.query.status) {
-        filters.status = Array.isArray(req.query.status) 
-          ? (req.query.status as LeadStatus[])
-          : [req.query.status as LeadStatus];
-      }
-      
-      if (req.query.type) {
-        filters.type = Array.isArray(req.query.type) 
-          ? (req.query.type as LeadType[])
-          : [req.query.type as LeadType];
-      }
-      
-      if (req.query.assignedToId) {
-        filters.assignedToId = req.query.assignedToId as string;
-      }
-      
-      if (req.query.assignedOrganizationId) {
-        filters.assignedOrganizationId = req.query.assignedOrganizationId as string;
-      }
-      
-      if (req.query.priority) {
-        filters.priority = req.query.priority as string;
-      }
       
       if (req.query.search) {
         filters.search = req.query.search as string;
@@ -162,7 +138,7 @@ export class LeadController {
    * Update a lead
    * Only updates provided fields
    */
-  async updateLead(req: Request, res: Response): Promise<void> {
+  async updateLead(_req: Request, res: Response): Promise<void> {
     // TODO: Re-implement after Step 2 (shared types update) and Step 3 (frontend update)
     // Step 1 focuses on read-only display of tc_everychildlead data
     res.status(501).json({

@@ -161,7 +161,7 @@ describe('LeadService', () => {
 
       const mockD365Lead = {
         tc_everychildleadid: 'c1d2e3f4-a5b6-7890-abcd-ef9876543210',
-        tc_name: 'Test Lead',
+        tc_name: 'Test Lead Title',
         tc_ecleadlifecyclestatus: 948010000, // assigned
         tc_engagementinterest: 948010000, // foster
         tc_leadscore2: 85,
@@ -191,11 +191,12 @@ describe('LeadService', () => {
       const lead = result.value[0];
       
       expect(lead.id).toBe('c1d2e3f4-a5b6-7890-abcd-ef9876543210');
-      expect(lead.displayName).toBe('John Doe');
-      expect(lead.email).toBe('john@example.com');
+      expect(lead.name).toBe('Test Lead Title');
+      expect(lead.subjectName).toBe('John Doe');
+      expect(lead.subjectEmail).toBe('john@example.com');
       expect(lead.status).toBe('assigned');
       expect(lead.type).toBe('foster');
-      expect(lead.assignedToName).toBe('Jane Smith');
+      expect(lead.leadOwnerName).toBe('Jane Smith');
       expect(lead.assignedOrganizationId).toBe(TEST_ORG_GUID);
       expect(lead.assignedOrganizationName).toBe('Test Organization');
     });
@@ -230,9 +231,10 @@ describe('LeadService', () => {
       expect(result.value).toHaveLength(1);
       const lead = result.value[0];
       
-      expect(lead.displayName).toBe('Test Lead'); // Falls back to tc_name
-      expect(lead.email).toBeUndefined();
-      expect(lead.assignedToName).toBeUndefined();
+      expect(lead.name).toBe('Test Lead'); // tc_name field
+      expect(lead.subjectName).toBeUndefined();
+      expect(lead.subjectEmail).toBeUndefined();
+      expect(lead.leadOwnerName).toBeUndefined();
     });
 
     it('should throw AppError when D365 token is unavailable', async () => {
