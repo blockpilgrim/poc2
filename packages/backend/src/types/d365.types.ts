@@ -21,6 +21,19 @@ export interface D365Filter {
   organizationId?: string;
   
   /**
+   * User's organization name from D365
+   * Used for display purposes
+   */
+  organizationName?: string;
+  
+  /**
+   * User's organization lead type from D365
+   * Comma-separated string of organization types (e.g., "948010000,948010001")
+   * CRITICAL: Used to determine which organization fields to filter on
+   */
+  organizationLeadType?: string;
+  
+  /**
    * User ID for ownership filtering
    */
   userId?: string;

@@ -101,56 +101,6 @@ Microsoft Entra ID App Roles will define user permissions. The roles are designe
 
 Roles will be assigned in Microsoft Entra ID and will be included as claims in the JWT, enabling the application to enforce permissions accordingly.
 
-## Reusable Components from Next.js Implementation
-
-### Directly Portable (Copy with minimal changes)
-1. **UI Components** (`components/ui/*`, `components/custom/*`)
-   - All shadcn/ui components
-   - Custom components (data cards, forms, tables)
-   - Layout components (with router adjustments)
-
-2. **State Management** (`lib/itemFilterStore.ts`)
-   - Zustand stores work identically in Vite/React
-   - Add persistence and multi-tab sync capabilities
-
-3. **Form Schemas & Validation**
-   - Zod schemas for forms
-   - React Hook Form implementations
-
-4. **Utility Functions** (`lib/utils/*`)
-   - Error handling utilities
-   - Theme utilities (adapt for initiative-based theming)
-   - General helper functions
-
-5. **Types & Interfaces**
-   - Domain models
-   - API contracts (with adjustments for initiative)
-
-### Requires Adaptation
-1. **D365 Client** (`lib/clients/d365Client.ts`)
-   - Move to Express backend
-   - Adapt token management for server environment
-   - Fetch organization data from D365
-
-2. **D365 Services** (`lib/services/d365ContactService.ts`)
-   - Move to Express backend
-   - Expose via RESTful endpoints
-   - Fetch organizational data (Account) and lead management data
-
-3. **Authentication Logic** (`lib/auth.ts`)
-   - Replace Auth.js with MSAL Node
-   - Implement JWT-based API authentication with Entra ID groups and roles
-
-4. **API Routes** (`app/api/*`)
-   - Convert to Express routes
-   - Add mandatory initiative filtering middleware
-   - Maintain same business logic
-
-5. **Protected Routes**
-   - Implement client-side route guards
-   - API middleware for backend protection
-   - Initiative validation on all requests
-
 ## Feature Checklist
 
 ### POC Stage - Architecture Validation & Core Infrastructure
@@ -196,7 +146,8 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Implement actual D365 Web API queries (Contact & Account retrieval)
 - [x] **CRITICAL**: Create /api/auth/profile endpoint combining Entra ID identity with D365 org data
 - [x] **CRITICAL**: Enhance /api/auth/me endpoint to include theme configuration
-- [ ] Verify D365 queries respect initiative boundaries (if applicable)
+- [x] Verify D365 queries respect initiative boundaries (implemented in lead service)
+- [x] **CRITICAL**: Implement tc_everychildlead queries with organization filtering
 
 #### Basic UI Foundation
 - [x] Configure Tailwind CSS (latest stable) and migrate design tokens
@@ -243,9 +194,9 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 #### Core API Development
 - [x] Design RESTful API structure
 - [x] Implement CRUD endpoints for leads with initiative filtering
-  - [x] GET /api/v1/leads - List with pagination, filtering, sorting
-  - [x] GET /api/v1/leads/:id - Get single lead with initiative verification
-  - [x] PATCH /api/v1/leads/:id - Update lead with security checks
+  - [x] GET /api/v1/leads - List with pagination, filtering, sorting (refactored for tc_everychildlead)
+  - [x] GET /api/v1/leads/:id - Get single lead with initiative verification (refactored for tc_everychildlead)
+  - [x] PATCH /api/v1/leads/:id - Update lead with security checks (temporarily disabled for Step 1)
   - [x] GET /api/v1/leads/stats - Lead statistics endpoint
 - [x] Add pagination, filtering, and sorting
 - [ ] Create batch operations endpoints
@@ -253,6 +204,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] **Security**: Input validation for all endpoints
 - [x] Add initiative audit logging (via D365_FILTER_APPLIED events)
 - [x] Create cross-initiative access alerts
+- [x] **CRITICAL**: Implement organization-based filtering (Foster vs Volunteer)
 
 #### Frontend Data Layer
 - [x] Configure TanStack Query with auth interceptors (QueryClient configured, interceptors in place)
@@ -285,6 +237,8 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [ ] Configure ESLint and Prettier for both projects
 - [ ] Set up git hooks for code quality
 - [x] Document state management patterns and conventions (Complete - docs/state-management*.md files created)
+- [x] Document backend architecture and API patterns (Complete - backend-architecture.md, backend-api-reference.md)
+- [x] Document D365 integration patterns (Complete - d365-integration-guide.md, backend-troubleshooting.md)
 
 #### Basic Deployment & Monitoring
 - [ ] Configure Vite production builds
@@ -298,16 +252,17 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [ ] Implement error tracking
 
 #### Core Testing
-- [ ] Set up Vitest for both frontend and backend
+- [x] Set up Vitest for both frontend and backend
 - [ ] Port applicable tests from Next.js
 - [ ] Add API integration tests with Supertest
 - [ ] Implement component testing
 - [ ] Add state management unit tests
-- [ ] Test initiative boundary enforcement
+- [x] Test initiative boundary enforcement (lead service tests)
 - [ ] **Priority**: Add comprehensive test coverage for authentication system
   - [ ] Unit tests for all auth services and middleware
   - [ ] Integration tests for complete auth flow
   - [ ] Security tests for initiative boundary enforcement
+- [x] Unit tests for lead service with organization filtering
 
 ### Post-MVP Stage - Advanced Features & Optimization
 
@@ -453,10 +408,15 @@ poc-portal-2/
 │   ├── initiative-based-theming.md # Theme implementation
 │   ├── frontend-authentication-flow.md # Auth flow
 │   ├── azure-ad-group-setup.md # Entra ID configuration
-│   └── azure-ad-app-registration-requirements.md # Azure setup
+│   ├── azure-ad-app-registration-requirements.md # Azure setup
+│   ├── backend-architecture.md # Backend design principles
+│   ├── backend-api-reference.md # API endpoint documentation
+│   ├── d365-integration-guide.md # D365 data model and queries
+│   └── backend-troubleshooting.md # Common issues and debugging
 │
 │   Key implementation docs:
-│   └── backend/src/services/GUID-MAPPING-IMPLEMENTATION.md
+│   ├── backend/src/services/GUID-MAPPING-IMPLEMENTATION.md
+│   └── backend/LEAD-SERVICE-REFACTORING-STEP1.md
 ├── docker-compose.yml          # Local development setup
 └── azure-pipelines.yml         # CI/CD configuration
 ```
@@ -682,69 +642,47 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 **Phase:** Foundational Refactoring - Lead Data Source Realignment
 
-**Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity. This is a critical realignment to ensure the portal displays the correct data assigned to partner organizations.
+**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Step 2 Shared Types → IN PROGRESS | Step 3 Frontend → PENDING
 
-**Background & Problem Statement:**
-The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. The current implementation, therefore, fetches and displays the wrong data. This phase will address this foundational issue by refactoring the backend services, shared types, and frontend components to use `tc_everychildlead` as the single source of truth for leads.
-
----
-
-### Executive Summary of the Refined Strategy
-
-The core of this plan is to modify the backend's `lead.service.ts` to become a robust data aggregation and transformation layer. It will not just fetch `tc_everychildlead` records; it will construct a complete, UI-friendly `Lead` object by:
-
-1.  **Querying `tc_everychildlead`** as the base entity.
-2.  **Expanding to the related `Contact`** (`tc_contact`) to retrieve the lead subject's name and contact information, preserving the integrity of the existing UI components.
-3.  **Expanding to the owning `Contact`** (`tc_leadowner`) to display the internal owner of the lead.
-4.  **Implementing precise assignment logic** based on the user's organization type (`tc_organizationleadtype`).
-5.  **Transforming D365 option set integers** into the meaningful string literals required by the frontend.
-
-This approach ensures the frontend receives a clean, consistent data structure, minimizing its complexity and adhering to our architectural principle of a smart backend and a leaner frontend.
+**Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity.
 
 ---
 
-### Implementation Plan
+### Step 1 Completion Summary (Backend Refactoring) ✅
 
-The goal is to successfully **display a list of the correct `tc_everychildlead` records** assigned to a user's organization. Create/Update/Delete operations and frontend filtering are deferred.
+**What Was Completed:**
+1. **Lead Service Refactored** (`lead.service.ts`)
+   - Now queries `/tc_everychildleads` instead of `/contacts`
+   - Implements fail-secure organization checking (returns empty if org missing)
+   - Organization-based filtering works for Foster, Volunteer, and dual-type orgs
+   - Expands `tc_contact` and `tc_leadowner` for complete data
+   - Maps D365 integers to meaningful strings
 
-#### **Step 1: Backend (`packages/backend`) - The Core Refactoring**
+2. **D365 Mappings Created** (`constants/d365-mappings.ts`)
+   - Centralized status and type mappings
+   - Helper functions for safe transformations
+   - Organization type constants and validation
 
-**File to Modify: `services/lead.service.ts`**
+3. **Security Enhancements**
+   - `organizationLeadType` added to D365Filter and JWT
+   - Middleware updated to inject organization context
+   - Validation for organizationLeadType format
+   - Fallback to Foster filter for backward compatibility
 
-1.  **Securely Handle Missing Organization ID:**
-    * Modify the `getLeads` function to adopt a "fail-secure" approach.
-    * If `initiativeFilter.organizationId` is missing from the request context, the service must immediately return an empty result (`{ value: [], totalCount: 0 }`).
-    * **Do not** proceed with a query that omits the organization filter. This prevents data leakage and upholds the **Security** principle.
+4. **Testing & Documentation**
+   - Unit tests for lead service (10 tests passing)
+   - Comprehensive backend documentation added to `/docs`
+   - Lead Management Quick Reference updated with backend section
 
-2.  **Construct the D365 Web API Query:**
-    * In the `getLeads` function, change the target entity in the D365 API URL from `/contacts` to `/tc_everychildleads`.
-    * The query must `$expand` the necessary lookups to fetch related data in a single call: `$expand=tc_contact($select=fullname,emailaddress1),tc_leadowner($select=fullname)`.
-    * The `$select` on the base query should include `tc_name`, `tc_ecleadlifecyclestatus`, the "Engagement Interest" field (e.g., `tc_engagementinterest`), `tc_leadscore2`, `createdon`, and `modifiedon`.
+**Key Implementation Details for Next Steps:**
+- Backend maintains existing `Lead` interface temporarily (with type casting)
+- `mapD365ToLead` splits fullname into first/last for compatibility
+- Update operations disabled (501 status) until migration complete
+- Organization filters: Foster uses direct lookup, Volunteer uses many-to-many
 
-3.  **Implement Correct Filtering Logic (`buildSecureODataFilter`):**
-    * **IMPORTANT**: The `tc_organizationleadtype` is already available in the JWT. During login, `d365Service.getUserOrganization` fetches this field from the D365 Account entity and includes it in the user's JWT claims. Access it via `req.user.organization.organizationLeadType` - no additional D365 lookup needed.
-    * Your filter must include three primary conditions joined by `and`:
-        * `statecode eq 0` (to fetch only active leads).
-        * `_tc_initiative_value eq '{user-initiative-id}'` (to enforce the initiative boundary).
-        * An organization assignment block using `or` logic:
-            * If `tc_organizationleadtype` contains `"948010000"` (Foster), include the condition: `_tc_fosterorganization_value eq '{user-account-id}'`.
-            * If `tc_organizationleadtype` contains `"948010001"` (Volunteer), include the condition: `tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '{user-account-id}')`.
+---
 
-4.  **Rewrite the Data Mapping Logic (`mapD365ToLead`):**
-    * This function must be updated to accept a `tc_everychildlead` object from the API response.
-    * Implement mapping for Option Sets:
-        * Create an internal helper to map the `tc_ecleadlifecyclestatus` integer (e.g., `948010002`) to its string representation (e.g., `"assigned"`).
-        * Create a helper to infer the `LeadType` ('foster' or 'volunteer') based on the "Engagement Interest" field's integer values. Prioritize 'foster' if both are present.
-        * **Note**: The 'other' status serves as a fallback for any unmapped status values, ensuring system stability.
-    * Map the expanded data correctly: `subjectName` should come from `d365Lead.tc_contact.fullname` and `leadOwnerName` from `d365Lead.tc_leadowner.fullname`.
-    * **Error Handling**: Use optional chaining (`?.`) when accessing expanded lookups to handle null references gracefully (e.g., `d365Lead.tc_contact?.fullname`).
-
-**Additional Implementation Notes:**
-- **Option Set Mappings**: Create a new file `packages/backend/src/constants/d365-mappings.ts` to centralize all D365 integer-to-string mappings (e.g., `LEAD_STATUS_MAP`, `LEAD_TYPE_MAP`).
-- **Performance**: The existing pagination limit (100 records max) provides sufficient protection against timeout issues despite the additional `$expand` operations.
-- **Organization Type Caching**: The `tc_organizationleadtype` is cached in the JWT for its 15-minute lifespan, eliminating repeated D365 lookups.
-
-#### **Step 2: Shared Package (`packages/shared`) - The Data Contract**
+### Step 2: Shared Package (`packages/shared`) - The Data Contract
 
 **File to Modify: `src/types/lead.ts`**
 
@@ -793,49 +731,45 @@ The goal is to successfully **display a list of the correct `tc_everychildlead` 
 
 **Note**: The organization fields (`assignedOrganizationId`, `assignedOrganizationName`) are populated from the user's JWT organization data, not from D365. This provides valuable UI context and supports future network-wide views.
 
+**Note on Lead Interface Compatibility:**
+The backend currently maps `tc_everychildlead` to the existing `Lead` interface structure to maintain compatibility. This includes:
+- Splitting `tc_contact.fullname` into `firstName` and `lastName`
+- Using `displayName` for the lead subject's name
+- Placing lead title (`tc_name`) in the notes field temporarily
+- Type-casting status/type values with `as any` until proper enums are defined
+
 #### **Step 3: Frontend (`packages/frontend`) - Adapting the UI and State**
 
-This step involves refactoring the state management for filters, updating the data fetching hook, and adapting the UI components to the new `Lead` data model.
-
 **A. Refactor State Management (`filterStore.ts`)**
-
-* **Goal:** Remove all state and actions related to the now-obsolete Status, Type, and Priority filters.
-* **File:** `packages/frontend/src/stores/filterStore.ts`
-* **Actions:**
-    1.  **Modify `LeadFilters` Interface:** Remove the `status`, `type`, and `priority` properties.
-    2.  **Remove Setter Actions:** Delete the `setLeadStatus`, `setLeadType`, and `setLeadPriority` functions entirely.
-    3.  **Update `resetLeadFilters`:** Simplify this function by removing the logic that resets the obsolete filters.
-    4.  **Update `useHasActiveFilters`:** Refactor the logic inside this selector to remove the checks for `filters.status`, `filters.type`, and `filters.priority`.
-    5.  **Update `getLeadFiltersFromURL`:** Remove the lines that parse `status`, `type`, and `priority` from `URLSearchParams`.
+* Remove `status`, `type`, and `priority` from `LeadFilters` interface and all related actions
+* Update `resetLeadFilters`, `useHasActiveFilters`, and `getLeadFiltersFromURL`
 
 **B. Refactor Data Fetching Hook (`useLeads.ts`)**
-
-* **Goal:** Stop the `useLeads` hook from sending the obsolete filter parameters to the backend.
-* **File:** `packages/frontend/src/hooks/queries/leads/useLeads.ts`
-* **Actions:**
-    1.  In the `queryFn`, locate the `params` object being sent to the `api.get` call.
-    2.  Delete the lines that pass `status`, `type`, and `priority`. The API call should no longer include these parameters.
+* Remove obsolete filter parameters from API calls
 
 **C. Adapt UI Components**
-
-* **Goal:** Update the table and card components to display data from the new `Lead` object and remove the now-defunct filter UI.
-* **Actions:**
-    1.  **Update Table Columns:**
-        * **File:** `src/components/data/LeadTable/columns.tsx`
-        * Adapt the `ColumnDef` array to use the new properties from the updated `Lead` type.
-        * For the primary "Name" column, display both the subject's name (`row.original.subjectName`) and the lead's title (`row.original.name`) to provide full context.
-        * Add a new column to display the "Lead Owner" (`row.original.leadOwnerName`).
-        * Ensure the `email` and other contact-related cells now pull data from the new `subject...` properties.
-
-    2.  **Update Mobile Card View:**
-        * **File:** `src/components/leads/LeadCard.tsx`
-        * Update the card layout to display the new lead properties (`lead.name`, `lead.subjectName`, etc.), ensuring it provides a clear and useful summary on smaller screens.
-
-    3.  **Remove Obsolete Filter UI:**
-        * **File:** `src/components/data/LeadTable/LeadTableFilters.tsx`
-        * Remove the `<Select>` components and their container logic for "Status", "Type", and "Priority".
-        * The component should now only contain the search input and the logic to reset the search. The `hasFilters` check should be simplified to only account for the search term.
+* Update table columns to use new Lead properties
+* Update mobile card view for new data structure
+* Remove filter UI for status, type, and priority
 
 ---
+
+### Critical Information for Next Steps
+
+1. **Backend API Changes:**
+   - Lead endpoints now return data from `tc_everychildlead`
+   - Organization filtering is automatic based on JWT claims
+   - Update operations return 501 until migration complete
+
+2. **Security Context Required:**
+   - All lead queries require `organizationId` in JWT
+   - Missing org context = empty results (fail-secure)
+   - Organization type determines filter logic
+
+3. **Testing Considerations:**
+   - Test with Foster-only users
+   - Test with Volunteer-only users  
+   - Test with dual Foster/Volunteer users
+   - Verify no cross-org data leakage
 
 *This charter represents a strategic exploration of decoupled architecture with multi-state initiative support. The initiative-based security model is non-negotiable and must be implemented from day one.*

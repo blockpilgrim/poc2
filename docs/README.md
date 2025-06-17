@@ -23,19 +23,41 @@
 - **[Azure AD App Registration Requirements](./azure-ad-app-registration-requirements.md)** - Azure setup guide
 - **[Azure AD Group Setup](./azure-ad-group-setup.md)** - Security group configuration
 
+### Backend Architecture & APIs
+- **[Backend Architecture](./backend-architecture.md)** - Core design principles and patterns
+- **[Backend API Reference](./backend-api-reference.md)** - Complete API endpoint documentation
+- **[D365 Integration Guide](./d365-integration-guide.md)** - Dynamics 365 data model and queries
+- **[Backend Troubleshooting](./backend-troubleshooting.md)** - Common issues and debugging guide
+
 ## Documentation Structure
 
 ### For New Team Members
+
+#### Frontend Developers
 1. Start with **[Lead Management UI](./lead-management-ui.md)** for a complete feature example
 2. Review **[State Management](./state-management.md)** to understand data flow
 3. Check **[Data Fetching](./data-fetching.md)** for API integration patterns
 4. Use **Quick Reference** guides for day-to-day tasks
 
+#### Backend Developers
+1. Start with **[Backend Architecture](./backend-architecture.md)** for design principles
+2. Review **[Backend API Reference](./backend-api-reference.md)** for endpoint details
+3. Check **[D365 Integration Guide](./d365-integration-guide.md)** for data model
+4. Study security patterns in authentication documentation
+
 ### For Specific Tasks
+
+#### Frontend Tasks
 - **Building a new table?** → [Data Table Pattern](./data-table-pattern.md)
 - **Adding filters?** → [State Management Patterns](./state-management-patterns.md)
 - **Working with leads?** → [Lead Management Quick Reference](./lead-management-quick-reference.md)
 - **Setting up auth?** → [Frontend Authentication Flow](./frontend-authentication-flow.md)
+
+#### Backend Tasks
+- **Adding an API endpoint?** → [Backend API Reference](./backend-api-reference.md)
+- **Querying D365 data?** → [D365 Integration Guide](./d365-integration-guide.md)
+- **Implementing security?** → [Backend Architecture](./backend-architecture.md#security-middleware-stack)
+- **Handling errors?** → [Backend Architecture](./backend-architecture.md#error-handling)
 
 ### For Architecture Decisions
 - **Why Zustand?** → [State Management](./state-management.md#why-zustand)

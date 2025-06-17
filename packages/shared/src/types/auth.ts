@@ -26,6 +26,7 @@ export interface OrganizationData {
   id: string;
   name: string;
   type?: string;
+  organizationLeadType?: string; // Comma-separated values like "948010000,948010001"
   attributes?: Record<string, any>;
 }
 

@@ -163,66 +163,13 @@ export class LeadController {
    * Only updates provided fields
    */
   async updateLead(req: Request, res: Response): Promise<void> {
-    try {
-      // Ensure D365 filter is present
-      if (!req.d365Filter) {
-        throw new AppError('D365 filter not found - ensure enforceInitiative middleware is applied', 500);
-      }
-      
-      const { id } = req.params;
-      
-      if (!id) {
-        throw new AppError('Lead ID is required', 400);
-      }
-      
-      // Validate request body
-      const allowedFields = [
-        'firstName',
-        'lastName',
-        'email',
-        'phoneNumber',
-        'alternatePhone',
-        'address',
-        'status',
-        'type',
-        'priority',
-        'source',
-        'notes',
-        'tags'
-      ];
-      
-      const updates: any = {};
-      for (const field of allowedFields) {
-        if (req.body[field] !== undefined) {
-          updates[field] = req.body[field];
-        }
-      }
-      
-      if (Object.keys(updates).length === 0) {
-        throw new AppError('No valid fields to update', 400);
-      }
-      
-      // Update lead with initiative verification
-      const updatedLead = await leadService.updateLead(req.d365Filter, id, updates);
-      
-      res.json({
-        data: updatedLead,
-        message: 'Lead updated successfully'
-      });
-    } catch (error) {
-      console.error('[LeadController] Error updating lead:', error);
-      if (error instanceof AppError) {
-        res.status(error.statusCode).json({
-          error: error.message,
-          code: error.statusCode === 404 ? 'NOT_FOUND' : 'UPDATE_ERROR'
-        });
-      } else {
-        res.status(500).json({
-          error: 'Failed to update lead',
-          code: 'INTERNAL_ERROR'
-        });
-      }
-    }
+    // TODO: Re-implement after Step 2 (shared types update) and Step 3 (frontend update)
+    // Step 1 focuses on read-only display of tc_everychildlead data
+    res.status(501).json({
+      error: 'Lead updates are temporarily disabled during system refactoring',
+      code: 'NOT_IMPLEMENTED',
+      message: 'This feature will be re-enabled after the data model migration is complete'
+    });
   }
   
   /**

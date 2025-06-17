@@ -167,4 +167,28 @@ console.log(useFilterStore.getState().leadFilters)
 **Navigation not working**
 - Use React Router for internal routes
 - Check route definitions in App.tsx
-- Ensure protected route wrapper is applied
+
+## Backend Quick Reference
+
+### D365 Entity
+Leads are fetched from `tc_everychildlead` entity (not Contact):
+- **Service**: `/packages/backend/src/services/lead.service.ts`
+- **Mappings**: `/packages/backend/src/constants/d365-mappings.ts`
+
+### Key Fields
+- `tc_everychildleadid`: Lead ID
+- `tc_name`: Lead title
+- `tc_ecleadlifecyclestatus`: Status (mapped to strings)
+- `tc_engagementinterest`: Type (foster/volunteer)
+- `tc_contact`: Related contact (expanded)
+- `tc_leadowner`: Owner (expanded)
+
+### Organization Filters
+- **Foster**: `_tc_fosterorganization_value eq '{orgId}'`
+- **Volunteer**: `tc_eclead_tc_ecleadsvolunteerorg_eclead/any(...)`
+
+### API Endpoints
+- `GET /api/v1/leads` - List with filters
+- `GET /api/v1/leads/:id` - Single lead
+- `PATCH /api/v1/leads/:id` - Update (disabled in Step 1)
+- `GET /api/v1/leads/stats` - Statistics

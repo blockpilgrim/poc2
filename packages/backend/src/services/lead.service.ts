@@ -3,10 +3,38 @@ import { AppError } from '../utils/errors';
 import type { 
   D365Filter, 
   D365QueryOptions, 
-  D365QueryResult, 
-  D365Lead 
+  D365QueryResult
 } from '../types/d365.types';
-import type { Lead, LeadFilters, LeadStatus, LeadType } from '@partner-portal/shared';
+import type { Lead, LeadFilters } from '@partner-portal/shared';
+import { 
+  D365_LEAD_FIELDS,
+  ORGANIZATION_LEAD_TYPE,
+  hasOrganizationType,
+  mapLeadStatus,
+  mapLeadType
+} from '../constants/d365-mappings';
+
+// Type for tc_everychildlead response
+interface D365EveryChildLead {
+  tc_everychildleadid: string;
+  tc_name: string;
+  tc_ecleadlifecyclestatus?: number;
+  tc_engagementinterest?: number;
+  tc_leadscore2?: number;
+  statecode: number;
+  createdon: string;
+  modifiedon: string;
+  _tc_initiative_value?: string;
+  _tc_fosterorganization_value?: string;
+  // Expanded entities
+  tc_contact?: {
+    fullname?: string;
+    emailaddress1?: string;
+  };
+  tc_leadowner?: {
+    fullname?: string;
+  };
+}
 
 /**
  * Lead Service
@@ -28,51 +56,57 @@ export class LeadService {
   ): string {
     const filters: string[] = [];
     
-    // CRITICAL: Always include initiative filter first (non-negotiable)
+    // 1. Always filter for active records only
+    filters.push('statecode eq 0');
+    
+    // 2. CRITICAL: Always include initiative filter (non-negotiable)
     if (!initiativeFilter.initiative) {
       throw new AppError('Initiative filter is required for all queries', 500);
     }
-    filters.push(`tc_initiative eq '${this.escapeODataString(initiativeFilter.initiative)}'`);
+    filters.push(`_tc_initiative_value eq '${this.escapeODataString(initiativeFilter.initiative)}'`);
     
-    // Add organization filter if available
+    // 3. Organization-based assignment filter
+    // CRITICAL: Use organizationLeadType from JWT to determine correct filter
     if (initiativeFilter.organizationId) {
-      filters.push(`_tc_assignedorganization_value eq '${initiativeFilter.organizationId}'`);
+      const orgFilters: string[] = [];
+      
+      // Validate organizationLeadType format if present
+      if (initiativeFilter.organizationLeadType) {
+        // Validate format: should be comma-separated numbers
+        const validPattern = /^\d+(,\d+)*$/;
+        if (!validPattern.test(initiativeFilter.organizationLeadType)) {
+          console.warn('[LeadService] Invalid organizationLeadType format:', {
+            organizationLeadType: initiativeFilter.organizationLeadType,
+            organizationId: initiativeFilter.organizationId
+          });
+        } else {
+          // Foster organization filter
+          if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.FOSTER)) {
+            orgFilters.push(`_tc_fosterorganization_value eq '${initiativeFilter.organizationId}'`);
+          }
+          
+          // Volunteer organization filter (many-to-many relationship)
+          if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.VOLUNTEER)) {
+            orgFilters.push(`tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '${initiativeFilter.organizationId}')`);
+          }
+        }
+      } else {
+        // If no organizationLeadType, default to foster organization filter for backward compatibility
+        console.warn('[LeadService] No organizationLeadType provided, defaulting to foster filter');
+        orgFilters.push(`_tc_fosterorganization_value eq '${initiativeFilter.organizationId}'`);
+      }
+      
+      if (orgFilters.length > 0) {
+        filters.push(`(${orgFilters.join(' or ')})`);
+      }
     }
     
     // Add user-provided filters
     if (userFilters) {
-      // Status filter
-      if (userFilters.status) {
-        const statuses = Array.isArray(userFilters.status) ? userFilters.status : [userFilters.status];
-        const statusFilters = statuses.map(s => `tc_leadstatus eq '${this.escapeODataString(s)}'`);
-        if (statusFilters.length > 0) {
-          filters.push(`(${statusFilters.join(' or ')})`);
-        }
-      }
-      
-      // Type filter
-      if (userFilters.type) {
-        const types = Array.isArray(userFilters.type) ? userFilters.type : [userFilters.type];
-        const typeFilters = types.map(t => `tc_leadtype eq '${this.escapeODataString(t)}'`);
-        if (typeFilters.length > 0) {
-          filters.push(`(${typeFilters.join(' or ')})`);
-        }
-      }
-      
-      // Assigned to filter
-      if (userFilters.assignedToId) {
-        filters.push(`_ownerid_value eq '${userFilters.assignedToId}'`);
-      }
-      
-      // Priority filter
-      if (userFilters.priority) {
-        filters.push(`tc_priority eq '${this.escapeODataString(userFilters.priority)}'`);
-      }
-      
-      // Search filter (searches across name and email)
+      // Search filter (searches across lead name)
       if (userFilters.search) {
         const searchTerm = this.escapeODataString(userFilters.search);
-        filters.push(`(contains(firstname, '${searchTerm}') or contains(lastname, '${searchTerm}') or contains(emailaddress1, '${searchTerm}'))`);
+        filters.push(`contains(tc_name, '${searchTerm}')`);
       }
     }
     
@@ -88,45 +122,31 @@ export class LeadService {
   }
   
   /**
-   * Build OData query parameters
+   * Build OData query parameters for tc_everychildlead
    */
   private buildODataQuery(options: D365QueryOptions): string {
     const params: string[] = [];
     
-    // Select fields
+    // Select fields from tc_everychildlead
     const selectFields = [
-      'contactid',
-      'firstname',
-      'lastname',
-      'fullname',
-      'emailaddress1',
-      'telephone1',
-      'telephone2',
-      'address1_line1',
-      'address1_line2',
-      'address1_city',
-      'address1_stateorprovince',
-      'address1_postalcode',
-      'address1_country',
-      'tc_initiative',
-      'tc_leadstatus',
-      'tc_leadtype',
-      'tc_priority',
-      'tc_source',
-      'tc_notes',
-      'tc_tags',
-      '_ownerid_value',
-      '_tc_assignedorganization_value',
-      'createdon',
-      'modifiedon',
-      'tc_lastcontactedon',
-      'tc_assignedon'
+      D365_LEAD_FIELDS.ID,
+      D365_LEAD_FIELDS.NAME,
+      D365_LEAD_FIELDS.STATUS,
+      D365_LEAD_FIELDS.ENGAGEMENT_INTEREST,
+      D365_LEAD_FIELDS.LEAD_SCORE,
+      D365_LEAD_FIELDS.CREATED_ON,
+      D365_LEAD_FIELDS.MODIFIED_ON,
+      D365_LEAD_FIELDS.INITIATIVE,
+      D365_LEAD_FIELDS.FOSTER_ORGANIZATION
     ];
     params.push(`$select=${selectFields.join(',')}`);
     
+    // Expand related entities
+    params.push(`$expand=${D365_LEAD_FIELDS.CONTACT}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME},${D365_LEAD_FIELDS.CONTACT_EMAIL}),${D365_LEAD_FIELDS.LEAD_OWNER}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME})`);
+    
     // Pagination
     if (options.limit) {
-      params.push(`$top=${options.limit}`);
+      params.push(`$top=${Math.min(options.limit, 100)}`); // Cap at 100 for performance
     }
     if (options.offset) {
       params.push(`$skip=${options.offset}`);
@@ -148,52 +168,44 @@ export class LeadService {
   }
   
   /**
-   * Map D365 contact to our Lead interface
+   * Map D365 tc_everychildlead to our Lead interface
+   * Includes data from expanded lookups with null safety
    */
-  private mapD365ToLead(d365Contact: D365Lead): Lead {
+  private mapD365ToLead(
+    d365Lead: D365EveryChildLead,
+    userOrganization?: { id: string; name: string }
+  ): Lead {
+    // Map tc_everychildlead to existing Lead interface
+    // This is a temporary mapping until Step 2 updates the shared types
+    const [firstName = '', lastName = ''] = (d365Lead.tc_contact?.fullname || '').split(' ', 2);
+    
     return {
-      id: d365Contact.contactid,
-      d365Id: d365Contact.contactid,
-      initiativeId: d365Contact.tc_initiative,
+      id: d365Lead.tc_everychildleadid,
+      d365Id: d365Lead.tc_everychildleadid,
+      initiativeId: d365Lead._tc_initiative_value || '',
       
-      // Contact info
-      firstName: d365Contact.firstname || '',
-      lastName: d365Contact.lastname || '',
-      displayName: `${d365Contact.firstname || ''} ${d365Contact.lastname || ''}`.trim(),
-      email: d365Contact.emailaddress1,
-      phoneNumber: d365Contact.telephone1,
-      alternatePhone: d365Contact.telephone2,
+      // Contact Information (from expanded tc_contact)
+      firstName,
+      lastName,
+      displayName: d365Lead.tc_contact?.fullname || d365Lead.tc_name || '',
+      email: d365Lead.tc_contact?.emailaddress1,
       
-      // Address
-      address: (d365Contact.address1_line1 || d365Contact.address1_city) ? {
-        street1: d365Contact.address1_line1 || '',
-        street2: d365Contact.address1_line2,
-        city: d365Contact.address1_city || '',
-        state: d365Contact.address1_stateorprovince || '',
-        zipCode: d365Contact.address1_postalcode || '',
-        country: d365Contact.address1_country || 'USA'
-      } : undefined,
-      
-      // Lead details
-      status: (d365Contact.tc_leadstatus as LeadStatus) || 'new',
-      type: (d365Contact.tc_leadtype as LeadType) || 'other',
-      source: d365Contact.tc_source,
-      priority: d365Contact.tc_priority as 'low' | 'medium' | 'high' | undefined,
+      // Lead Details
+      status: mapLeadStatus(d365Lead.tc_ecleadlifecyclestatus) as any,
+      type: mapLeadType(d365Lead.tc_engagementinterest) as any,
       
       // Assignment
-      assignedToId: d365Contact._ownerid_value,
-      assignedOrganizationId: d365Contact._tc_assignedorganization_value,
+      assignedOrganizationId: userOrganization?.id,
+      assignedOrganizationName: userOrganization?.name,
+      assignedToName: d365Lead.tc_leadowner?.fullname,
       
       // Metadata
-      notes: d365Contact.tc_notes,
-      tags: d365Contact.tc_tags ? d365Contact.tc_tags.split(',').map(t => t.trim()) : undefined,
+      notes: `Lead: ${d365Lead.tc_name}${d365Lead.tc_leadscore2 ? ` (Score: ${d365Lead.tc_leadscore2})` : ''}`,
       
       // Timestamps
-      createdAt: new Date(d365Contact.createdon),
-      updatedAt: new Date(d365Contact.modifiedon),
-      lastContactedAt: d365Contact.tc_lastcontactedon ? new Date(d365Contact.tc_lastcontactedon) : undefined,
-      assignedAt: d365Contact.tc_assignedon ? new Date(d365Contact.tc_assignedon) : undefined
-    };
+      createdAt: new Date(d365Lead.createdon),
+      updatedAt: new Date(d365Lead.modifiedon)
+    } as Lead;
   }
   
   /**
@@ -210,6 +222,15 @@ export class LeadService {
     options: D365QueryOptions = {}
   ): Promise<D365QueryResult<Lead>> {
     try {
+      // CRITICAL: Fail-secure check - require organization ID
+      if (!initiativeFilter.organizationId) {
+        console.warn('[LeadService] Organization ID missing from request context', {
+          userId: initiativeFilter.userId,
+          initiative: initiativeFilter.initiative
+        });
+        return { value: [], totalCount: 0 };
+      }
+      
       // Get D365 access token
       const token = await d365Service.getAccessToken();
       if (!token) {
@@ -224,12 +245,13 @@ export class LeadService {
       console.log('[LeadService] Querying leads with filter:', {
         initiative: initiativeFilter.initiative,
         organization: initiativeFilter.organizationId,
+        organizationType: initiativeFilter.organizationLeadType,
         additionalFilters: filters,
         oDataFilter
       });
       
-      // Query D365
-      const url = `${process.env.D365_URL}/api/data/v9.2/contacts?$filter=${oDataFilter}&${queryParams}`;
+      // Query D365 - CHANGED: Now querying tc_everychildleads
+      const url = `${process.env.D365_URL}/api/data/v9.2/tc_everychildleads?$filter=${oDataFilter}&${queryParams}`;
       
       const response = await fetch(url, {
         method: 'GET',
@@ -249,13 +271,20 @@ export class LeadService {
       }
       
       const data = await response.json() as { 
-        value: D365Lead[]; 
+        value: D365EveryChildLead[]; 
         '@odata.count'?: number; 
         '@odata.nextLink'?: string 
       };
       
-      // Map results
-      const leads = data.value.map((contact: D365Lead) => this.mapD365ToLead(contact));
+      // Map results with user organization context
+      const userOrganization = initiativeFilter.organizationName ? {
+        id: initiativeFilter.organizationId,
+        name: initiativeFilter.organizationName
+      } : undefined;
+      
+      const leads = data.value.map((lead: D365EveryChildLead) => 
+        this.mapD365ToLead(lead, userOrganization)
+      );
       
       return {
         value: leads,
@@ -273,7 +302,7 @@ export class LeadService {
    * Get a single lead by ID with initiative verification
    * 
    * @param initiativeFilter - Security filter from middleware
-   * @param leadId - D365 Contact ID
+   * @param leadId - D365 tc_everychildlead ID
    * @returns Lead if found and user has access
    */
   async getLeadById(
@@ -281,43 +310,37 @@ export class LeadService {
     leadId: string
   ): Promise<Lead | null> {
     try {
+      // CRITICAL: Fail-secure check - require organization ID
+      if (!initiativeFilter.organizationId) {
+        console.warn('[LeadService] Organization ID missing from request context', {
+          userId: initiativeFilter.userId,
+          initiative: initiativeFilter.initiative
+        });
+        return null;
+      }
+      
       // Get D365 access token
       const token = await d365Service.getAccessToken();
       if (!token) {
         throw new AppError('Unable to authenticate with D365', 500);
       }
       
-      // Query specific lead
+      // Query specific lead with expanded lookups
       const selectFields = [
-        'contactid',
-        'firstname',
-        'lastname',
-        'fullname',
-        'emailaddress1',
-        'telephone1',
-        'telephone2',
-        'address1_line1',
-        'address1_line2',
-        'address1_city',
-        'address1_stateorprovince',
-        'address1_postalcode',
-        'address1_country',
-        'tc_initiative',
-        'tc_leadstatus',
-        'tc_leadtype',
-        'tc_priority',
-        'tc_source',
-        'tc_notes',
-        'tc_tags',
-        '_ownerid_value',
-        '_tc_assignedorganization_value',
-        'createdon',
-        'modifiedon',
-        'tc_lastcontactedon',
-        'tc_assignedon'
+        D365_LEAD_FIELDS.ID,
+        D365_LEAD_FIELDS.NAME,
+        D365_LEAD_FIELDS.STATUS,
+        D365_LEAD_FIELDS.ENGAGEMENT_INTEREST,
+        D365_LEAD_FIELDS.LEAD_SCORE,
+        D365_LEAD_FIELDS.CREATED_ON,
+        D365_LEAD_FIELDS.MODIFIED_ON,
+        D365_LEAD_FIELDS.INITIATIVE,
+        D365_LEAD_FIELDS.FOSTER_ORGANIZATION
       ];
       
-      const url = `${process.env.D365_URL}/api/data/v9.2/contacts(${leadId})?$select=${selectFields.join(',')}`;
+      const expandClause = `$expand=${D365_LEAD_FIELDS.CONTACT}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME},${D365_LEAD_FIELDS.CONTACT_EMAIL}),${D365_LEAD_FIELDS.LEAD_OWNER}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME})`;
+      
+      const url = `${process.env.D365_URL}/api/data/v9.2/tc_everychildleads(${leadId})?$select=${selectFields.join(',')}&${expandClause}`;
       
       const response = await fetch(url, {
         method: 'GET',
@@ -339,20 +362,26 @@ export class LeadService {
         throw new AppError('Failed to fetch lead from D365', response.status);
       }
       
-      const d365Lead = await response.json() as D365Lead;
+      const d365Lead = await response.json() as D365EveryChildLead;
       
       // CRITICAL: Verify the lead belongs to the user's initiative
-      if (d365Lead.tc_initiative !== initiativeFilter.initiative) {
+      if (d365Lead._tc_initiative_value !== initiativeFilter.initiative) {
         console.warn('[LeadService] Cross-initiative access attempt:', {
           userId: initiativeFilter.userId,
           requestedLead: leadId,
-          leadInitiative: d365Lead.tc_initiative,
+          leadInitiative: d365Lead._tc_initiative_value,
           userInitiative: initiativeFilter.initiative
         });
         return null; // Return null as if not found - don't reveal it exists
       }
       
-      return this.mapD365ToLead(d365Lead);
+      // Map result with user organization context
+      const userOrganization = initiativeFilter.organizationName ? {
+        id: initiativeFilter.organizationId,
+        name: initiativeFilter.organizationName
+      } : undefined;
+      
+      return this.mapD365ToLead(d365Lead, userOrganization);
     } catch (error) {
       console.error('[LeadService] Error fetching lead:', error);
       if (error instanceof AppError) throw error;
@@ -360,95 +389,6 @@ export class LeadService {
     }
   }
   
-  /**
-   * Update a lead with initiative verification
-   * 
-   * @param initiativeFilter - Security filter from middleware
-   * @param leadId - D365 Contact ID
-   * @param updates - Fields to update
-   * @returns Updated lead if successful
-   */
-  async updateLead(
-    initiativeFilter: D365Filter,
-    leadId: string,
-    updates: Partial<Lead>
-  ): Promise<Lead> {
-    try {
-      // First, verify the lead exists and user has access
-      const existingLead = await this.getLeadById(initiativeFilter, leadId);
-      if (!existingLead) {
-        throw new AppError('Lead not found', 404);
-      }
-      
-      // Get D365 access token
-      const token = await d365Service.getAccessToken();
-      if (!token) {
-        throw new AppError('Unable to authenticate with D365', 500);
-      }
-      
-      // Build D365 update payload
-      const d365Updates: any = {};
-      
-      if (updates.firstName !== undefined) d365Updates.firstname = updates.firstName;
-      if (updates.lastName !== undefined) d365Updates.lastname = updates.lastName;
-      if (updates.email !== undefined) d365Updates.emailaddress1 = updates.email;
-      if (updates.phoneNumber !== undefined) d365Updates.telephone1 = updates.phoneNumber;
-      if (updates.alternatePhone !== undefined) d365Updates.telephone2 = updates.alternatePhone;
-      
-      if (updates.status !== undefined) d365Updates.tc_leadstatus = updates.status;
-      if (updates.type !== undefined) d365Updates.tc_leadtype = updates.type;
-      if (updates.priority !== undefined) d365Updates.tc_priority = updates.priority;
-      if (updates.source !== undefined) d365Updates.tc_source = updates.source;
-      if (updates.notes !== undefined) d365Updates.tc_notes = updates.notes;
-      
-      if (updates.tags !== undefined) {
-        d365Updates.tc_tags = updates.tags.join(', ');
-      }
-      
-      if (updates.address) {
-        d365Updates.address1_line1 = updates.address.street1;
-        d365Updates.address1_line2 = updates.address.street2;
-        d365Updates.address1_city = updates.address.city;
-        d365Updates.address1_stateorprovince = updates.address.state;
-        d365Updates.address1_postalcode = updates.address.zipCode;
-        d365Updates.address1_country = updates.address.country;
-      }
-      
-      // Update in D365
-      const url = `${process.env.D365_URL}/api/data/v9.2/contacts(${leadId})`;
-      
-      const response = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'OData-MaxVersion': '4.0',
-          'OData-Version': '4.0',
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify(d365Updates)
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[LeadService] D365 update failed:', response.status, errorText);
-        throw new AppError('Failed to update lead in D365', response.status);
-      }
-      
-      // Return the updated lead
-      const updated = await this.getLeadById(initiativeFilter, leadId);
-      if (!updated) {
-        throw new AppError('Failed to retrieve updated lead', 500);
-      }
-      
-      return updated;
-    } catch (error) {
-      console.error('[LeadService] Error updating lead:', error);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update lead', 500);
-    }
-  }
 }
 
 // Export singleton instance

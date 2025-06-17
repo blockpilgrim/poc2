@@ -54,16 +54,25 @@ export type LeadStatus =
   | 'new'
   | 'contacted'
   | 'qualified'
-  | 'in_progress'
-  | 'converted'
-  | 'closed'
-  | 'lost';
+  | 'proposal_sent'
+  | 'negotiation'
+  | 'nurturing'
+  | 'won'
+  | 'lost'
+  | 'disqualified';
 
 export type LeadType = 
-  | 'foster'
+  | 'foster_parent'
+  | 'adoptive_parent'
+  | 'relative_caregiver'
+  | 'social_worker'
+  | 'case_manager'
+  | 'therapist'
+  | 'agency'
+  | 'nonprofit'
+  | 'government'
   | 'volunteer'
   | 'donor'
-  | 'partner'
   | 'other';
 
 export interface LeadFilters extends FilterParams {
@@ -73,4 +82,9 @@ export interface LeadFilters extends FilterParams {
   assignedOrganizationId?: string;
   priority?: string;
   tags?: string[];
+  // Date range filters
+  createdAfter?: Date | string;
+  createdBefore?: Date | string;
+  modifiedAfter?: Date | string;
+  modifiedBefore?: Date | string;
 }

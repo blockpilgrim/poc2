@@ -261,7 +261,8 @@ export class D365Service {
       return {
         id: account.accountid,
         name: account.name,
-        type: account.tc_organizationleadtype || 'Unknown',
+        type: account.tc_organizationleadtype || 'Unknown', // Legacy field
+        organizationLeadType: account.tc_organizationleadtype, // New field for lead filtering
         attributes: {
           leadType: account.tc_organizationleadtype,
           // Add other relevant attributes as needed

@@ -281,9 +281,11 @@ export const enforceInitiativeFromGroups = (requiredInitiative?: string) => {
         userId: req.user.sub
       };
       
-      // Add organization ID if available
-      if (req.user.organization?.id) {
+      // Add organization data if available
+      if (req.user.organization) {
         d365Filter.organizationId = req.user.organization.id;
+        d365Filter.organizationName = req.user.organization.name;
+        d365Filter.organizationLeadType = req.user.organization.organizationLeadType;
       }
       
       req.d365Filter = d365Filter;
@@ -346,8 +348,10 @@ export const enforceInitiative = (requiredInitiative?: string) => {
           userId: req.user.sub
         };
         
-        if (req.user.organization?.id) {
+        if (req.user.organization) {
           d365Filter.organizationId = req.user.organization.id;
+          d365Filter.organizationName = req.user.organization.name;
+          d365Filter.organizationLeadType = req.user.organization.organizationLeadType;
         }
         
         req.d365Filter = d365Filter;
