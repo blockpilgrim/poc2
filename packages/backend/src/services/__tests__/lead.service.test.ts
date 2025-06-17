@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { leadService } from '../lead.service';
 import { d365Service } from '../d365.service';
+import { initiativeMappingService } from '../initiative-mapping.service';
+import { getInitiativeIdFromGuid } from '../../config/initiatives.config';
 import { AppError } from '../../utils/errors';
 import type { D365Filter } from '../../types/d365.types';
 
@@ -11,8 +13,24 @@ vi.mock('../d365.service', () => ({
   }
 }));
 
+// Mock initiativeMappingService
+vi.mock('../initiative-mapping.service', () => ({
+  initiativeMappingService: {
+    getD365InitiativeGuid: vi.fn()
+  }
+}));
+
+// Mock initiatives config
+vi.mock('../../config/initiatives.config', () => ({
+  getInitiativeIdFromGuid: vi.fn()
+}));
+
 // Mock fetch
 global.fetch = vi.fn();
+
+// Test GUIDs (realistic format)
+const TEST_INITIATIVE_GUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+const TEST_ORG_GUID = 'f1e2d3c4-b5a6-9870-dcba-fe4321567890';
 
 describe('LeadService', () => {
   beforeEach(() => {
@@ -31,16 +49,18 @@ describe('LeadService', () => {
 
       expect(result).toEqual({ value: [], totalCount: 0 });
       expect(d365Service.getAccessToken).not.toHaveBeenCalled();
+      expect(initiativeMappingService.getD365InitiativeGuid).not.toHaveBeenCalled();
     });
 
     it('should build correct filter for foster organization', async () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationLeadType: '948010000' // Foster only
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -49,6 +69,7 @@ describe('LeadService', () => {
 
       await leadService.getLeads(filter);
 
+      expect(initiativeMappingService.getD365InitiativeGuid).toHaveBeenCalledWith('test-initiative');
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining('tc_everychildleads'),
         expect.any(Object)
@@ -56,8 +77,8 @@ describe('LeadService', () => {
       
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
       expect(url).toContain('statecode eq 0');
-      expect(url).toContain('_tc_initiative_value eq \'test-initiative\'');
-      expect(url).toContain('_tc_fosterorganization_value eq \'org-123\'');
+      expect(url).toContain(`_tc_initiative_value eq '${TEST_INITIATIVE_GUID}'`);
+      expect(url).toContain(`_tc_fosterorganization_value eq '${TEST_ORG_GUID}'`);
       expect(url).not.toContain('tc_eclead_tc_ecleadsvolunteerorg_eclead');
     });
 
@@ -65,10 +86,11 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationLeadType: '948010001' // Volunteer only
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -78,7 +100,7 @@ describe('LeadService', () => {
       await leadService.getLeads(filter);
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq \'org-123\')');
+      expect(url).toContain(`tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '${TEST_ORG_GUID}')`);
       // Note: _tc_fosterorganization_value appears in $select but not in $filter for volunteer-only orgs
       expect(url).toContain('$filter=');
       const filterPart = url.split('$filter=')[1].split('&')[0];
@@ -89,10 +111,11 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationLeadType: '948010000,948010001' // Both types
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -110,10 +133,11 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationLeadType: '948010000'
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -130,18 +154,18 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationName: 'Test Organization',
         organizationLeadType: '948010000'
       };
 
       const mockD365Lead = {
-        tc_everychildleadid: 'lead-123',
+        tc_everychildleadid: 'c1d2e3f4-a5b6-7890-abcd-ef9876543210',
         tc_name: 'Test Lead',
         tc_ecleadlifecyclestatus: 948010000, // assigned
         tc_engagementinterest: 948010000, // foster
         tc_leadscore2: 85,
-        _tc_initiative_value: 'test-initiative',
+        _tc_initiative_value: TEST_INITIATIVE_GUID, // Using D365 GUID
         createdon: '2024-01-01T00:00:00Z',
         modifiedon: '2024-01-02T00:00:00Z',
         tc_contact: {
@@ -153,6 +177,8 @@ describe('LeadService', () => {
         }
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(getInitiativeIdFromGuid).mockReturnValue('test-initiative');
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -164,13 +190,13 @@ describe('LeadService', () => {
       expect(result.value).toHaveLength(1);
       const lead = result.value[0];
       
-      expect(lead.id).toBe('lead-123');
+      expect(lead.id).toBe('c1d2e3f4-a5b6-7890-abcd-ef9876543210');
       expect(lead.displayName).toBe('John Doe');
       expect(lead.email).toBe('john@example.com');
       expect(lead.status).toBe('assigned');
       expect(lead.type).toBe('foster');
       expect(lead.assignedToName).toBe('Jane Smith');
-      expect(lead.assignedOrganizationId).toBe('org-123');
+      expect(lead.assignedOrganizationId).toBe(TEST_ORG_GUID);
       expect(lead.assignedOrganizationName).toBe('Test Organization');
     });
 
@@ -178,18 +204,21 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationLeadType: '948010000'
       };
 
       const mockD365Lead = {
-        tc_everychildleadid: 'lead-123',
+        tc_everychildleadid: 'd1e2f3a4-b5c6-7890-abcd-ef1234567890',
         tc_name: 'Test Lead',
+        _tc_initiative_value: TEST_INITIATIVE_GUID,
         createdon: '2024-01-01T00:00:00Z',
         modifiedon: '2024-01-02T00:00:00Z',
         // tc_contact and tc_leadowner are null/undefined
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(getInitiativeIdFromGuid).mockReturnValue('test-initiative');
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -210,14 +239,73 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationLeadType: '948010000'
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
       vi.mocked(d365Service.getAccessToken).mockResolvedValue(null);
 
       await expect(leadService.getLeads(filter)).rejects.toThrow(AppError);
       await expect(leadService.getLeads(filter)).rejects.toThrow('Unable to authenticate with D365');
+    });
+
+    it('should handle initiative GUID mapping errors gracefully', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID,
+        organizationLeadType: '948010000'
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockImplementation(() => {
+        throw new AppError('Initiative configuration error', 500);
+      });
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+
+      await expect(leadService.getLeads(filter)).rejects.toThrowError(
+        new AppError('Invalid initiative configuration', 500)
+      );
+    });
+
+    it('should log warning for unknown initiative GUIDs in results', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID,
+        organizationLeadType: '948010000'
+      };
+
+      const mockD365Lead = {
+        tc_everychildleadid: 'e1f2a3b4-c5d6-7890-abcd-ef1234567890',
+        tc_name: 'Test Lead',
+        _tc_initiative_value: 'unknown-guid-9999-9999-9999-999999999999',
+        createdon: '2024-01-01T00:00:00Z',
+        modifiedon: '2024-01-02T00:00:00Z'
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(getInitiativeIdFromGuid).mockReturnValue(undefined); // Unknown GUID
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ value: [mockD365Lead], '@odata.count': 1 })
+      } as Response);
+
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      const result = await leadService.getLeads(filter);
+      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[LeadService] Unknown D365 initiative GUID:',
+        expect.objectContaining({
+          leadId: 'e1f2a3b4-c5d6-7890-abcd-ef1234567890',
+          unknownGuid: 'unknown-guid-9999-9999-9999-999999999999'
+        })
+      );
+      expect(result.value[0].initiativeId).toBe(''); // Empty string for unknown
+      
+      consoleSpy.mockRestore();
     });
   });
 
@@ -226,24 +314,25 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123'
+        organizationId: TEST_ORG_GUID
       };
 
       const mockD365Lead = {
-        tc_everychildleadid: 'lead-123',
+        tc_everychildleadid: 'e1f2a3b4-c5d6-7890-abcd-ef9876543210',
         tc_name: 'Test Lead',
-        _tc_initiative_value: 'different-initiative', // Wrong initiative
+        _tc_initiative_value: 'b1c2d3e4-f5a6-7890-dcba-fe1234567890', // Wrong initiative GUID
         createdon: '2024-01-01T00:00:00Z',
         modifiedon: '2024-01-02T00:00:00Z'
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
         json: async () => mockD365Lead
       } as Response);
 
-      const result = await leadService.getLeadById(filter, 'lead-123');
+      const result = await leadService.getLeadById(filter, 'e1f2a3b4-c5d6-7890-abcd-ef9876543210');
 
       expect(result).toBeNull(); // Should return null for cross-initiative access
     });
@@ -252,28 +341,51 @@ describe('LeadService', () => {
       const filter: D365Filter = {
         initiative: 'test-initiative',
         userId: 'test-user',
-        organizationId: 'org-123',
+        organizationId: TEST_ORG_GUID,
         organizationName: 'Test Org'
       };
 
       const mockD365Lead = {
-        tc_everychildleadid: 'lead-123',
+        tc_everychildleadid: 'f1a2b3c4-d5e6-7890-abcd-ef1234567890',
         tc_name: 'Test Lead',
-        _tc_initiative_value: 'test-initiative', // Correct initiative
+        _tc_initiative_value: TEST_INITIATIVE_GUID, // Correct initiative GUID
         createdon: '2024-01-01T00:00:00Z',
         modifiedon: '2024-01-02T00:00:00Z'
       };
 
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(getInitiativeIdFromGuid).mockReturnValue('test-initiative');
       vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
         json: async () => mockD365Lead
       } as Response);
 
-      const result = await leadService.getLeadById(filter, 'lead-123');
+      const result = await leadService.getLeadById(filter, 'f1a2b3c4-d5e6-7890-abcd-ef1234567890');
 
       expect(result).not.toBeNull();
-      expect(result?.id).toBe('lead-123');
+      expect(result?.id).toBe('f1a2b3c4-d5e6-7890-abcd-ef1234567890');
+    });
+
+    it('should return null when initiative GUID mapping fails during security check', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockImplementation(() => {
+        throw new AppError('Initiative configuration error', 500);
+      });
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ tc_everychildleadid: 'lead-123' })
+      } as Response);
+
+      const result = await leadService.getLeadById(filter, 'lead-123');
+
+      expect(result).toBeNull(); // Fail secure - deny access
     });
   });
 });

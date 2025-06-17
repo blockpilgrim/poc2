@@ -2,6 +2,7 @@ import { AppError } from '../utils/errors';
 import { 
   isValidInitiativeGroup
 } from '../utils/group-naming.utils';
+import { getD365GuidForInitiative } from '../config/initiatives.config';
 
 export interface InitiativeMapping {
   groupName: string;
@@ -224,6 +225,41 @@ export class InitiativeMappingService {
       }
     }
     return initiativeId;
+  }
+
+  /**
+   * Get D365 GUID for an initiative
+   * This is used to map application initiative IDs to D365 Initiative entity GUIDs
+   * 
+   * @param initiativeId - The initiative ID (e.g., 'ec-oregon')
+   * @returns The D365 GUID for the initiative
+   * @throws AppError if no mapping exists
+   */
+  getD365InitiativeGuid(initiativeId: string): string {
+    const guid = getD365GuidForInitiative(initiativeId);
+    
+    if (!guid) {
+      console.error('[InitiativeMappingService] No D365 GUID mapping found:', {
+        initiativeId,
+        availableInitiatives: Object.keys(this.initiativeThemes),
+      });
+      throw new AppError(
+        `Initiative configuration error. Please contact your administrator.`,
+        500
+      );
+    }
+    
+    return guid;
+  }
+
+  /**
+   * Validate if a D365 GUID is valid format
+   * @param guid - The GUID to validate
+   * @returns true if valid GUID format
+   */
+  private isValidGuid(guid: string): boolean {
+    const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return guidPattern.test(guid);
   }
 
   /**

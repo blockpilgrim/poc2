@@ -148,6 +148,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] **CRITICAL**: Enhance /api/auth/me endpoint to include theme configuration
 - [x] Verify D365 queries respect initiative boundaries (implemented in lead service)
 - [x] **CRITICAL**: Implement tc_everychildlead queries with organization filtering
+- [x] **CRITICAL**: Implement configuration-driven initiative GUID mapping for D365 queries
 
 #### Basic UI Foundation
 - [x] Configure Tailwind CSS (latest stable) and migrate design tokens
@@ -263,6 +264,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
   - [ ] Integration tests for complete auth flow
   - [ ] Security tests for initiative boundary enforcement
 - [x] Unit tests for lead service with organization filtering
+- [x] Unit tests for initiative GUID configuration module
 
 ### Post-MVP Stage - Advanced Features & Optimization
 
@@ -283,8 +285,8 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [ ] Test multi-tab synchronization scenarios
 
 #### Advanced Initiative Support
-- [ ] **Scalability**: Implement dynamic initiative management for 50+ state support
-  - [ ] Move hardcoded state mappings to database or external configuration
+- [x] **Scalability**: Implement dynamic initiative management for 50+ state support
+  - [x] Move hardcoded state mappings to database or external configuration
   - [ ] Implement dynamic state/theme management system
   - [ ] Create admin interface for initiative configuration
   - [ ] Add configuration hot-reloading capabilities
@@ -412,6 +414,7 @@ poc-portal-2/
 │   ├── backend-architecture.md # Backend design principles
 │   ├── backend-api-reference.md # API endpoint documentation
 │   ├── d365-integration-guide.md # D365 data model and queries
+│   ├── initiative-guid-configuration.md # Initiative GUID mapping
 │   └── backend-troubleshooting.md # Common issues and debugging
 │
 │   Key implementation docs:
@@ -640,13 +643,13 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Foundational Refactoring - Lead Data Source Realignment**
+**Foundational Refactoring - Lead Data Source Realignment & Initiative GUID Configuration**
 
-**Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity.
+**Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity, while ensuring proper initiative GUID mapping for D365 queries.
 
 **Background & Problem Statement:**
 
-The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. The current implementation, therefore, fetches and displays the wrong data. This phase will address this foundational issue by refactoring the backend services, shared types, and frontend components to use `tc_everychildlead` as the single source of truth for leads.
+The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. Additionally, during Step 1 implementation, we discovered that the `_tc_initiative_value` field in D365 expects Initiative entity GUIDs (e.g., `b6ced3de-2993-ed11-aad1-6045bd006a3a` for EC Oregon), not the application's string identifiers (e.g., `ec-oregon`).
 
 ### Executive Summary of the Refined Strategy
 
@@ -660,7 +663,7 @@ The core of this plan is to modify the backend's `lead.service.ts` to become a r
 
 This approach ensures the frontend receives a clean, consistent data structure, minimizing its complexity and adhering to our architectural principle of a smart backend and a leaner frontend.
 
-**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Step 2 Shared Types → IN PROGRESS | Step 3 Frontend → PENDING
+**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Initiative GUID Mapping ✅ COMPLETE | Step 2 Shared Types → IN PROGRESS | Step 3 Frontend → PENDING
 
 ---
 
@@ -697,6 +700,59 @@ This approach ensures the frontend receives a clean, consistent data structure, 
 - `mapD365ToLead` splits fullname into first/last for compatibility
 - Update operations disabled (501 status) until migration complete
 - Organization filters: Foster uses direct lookup, Volunteer uses many-to-many
+
+**Initiative GUID Mapping Implementation (NEW):**
+1. **Configuration-Driven Approach** (`config/initiatives.config.ts`)
+   - Maps application initiative IDs to D365 GUIDs
+   - Supports environment variable configuration: `INITIATIVES_CONFIG_JSON`
+   - Validates configuration on startup with placeholder detection
+   - Enables 50+ state scalability without code changes
+
+2. **Performance Optimizations**
+   - Cached reverse lookup map for O(1) GUID-to-initiative conversion
+   - Case-insensitive GUID handling for D365 compatibility
+
+3. **Error Handling**
+   - Fail-secure approach: invalid mappings return empty results
+   - Comprehensive logging for debugging
+   - Try-catch blocks prevent crashes from configuration errors
+
+4. **Backward Compatibility**
+   - Frontend continues using string IDs (ec-oregon, etc.)
+   - JWT tokens unchanged
+   - API contracts preserved
+   - Mapping happens only at D365 query layer
+
+**CRITICAL for Production Deployment:**
+1. **Replace Placeholder GUIDs** in `initiatives.config.ts`:
+   ```typescript
+   'ec-kentucky': {
+     d365Guid: '00000000-0000-0000-0000-000000000001', // TODO: Replace with actual GUID
+     displayName: 'Kentucky',
+     enabled: true
+   },
+   // Same for Arkansas, Tennessee, Oklahoma
+   ```
+
+2. **Configure Production Environment**:
+   ```bash
+   export INITIATIVES_CONFIG_JSON='{
+     "initiatives": {
+       "ec-oregon": {
+         "d365Guid": "b6ced3de-2993-ed11-aad1-6045bd006a3a",
+         "displayName": "Oregon",
+         "enabled": true
+       },
+       // ... other states with actual GUIDs
+     }
+   }'
+   ```
+
+3. **How to Get D365 Initiative GUIDs**:
+   Query D365 to find Initiative entity records:
+   ```
+   GET /api/data/v9.2/tc_initiatives?$filter=tc_name eq 'EC Kentucky'
+   ```
 
 ---
 
@@ -778,16 +834,31 @@ The backend currently maps `tc_everychildlead` to the existing `Lead` interface 
    - Lead endpoints now return data from `tc_everychildlead`
    - Organization filtering is automatic based on JWT claims
    - Update operations return 501 until migration complete
+   - **NEW**: D365 queries now use Initiative GUIDs via configuration mapping
 
 2. **Security Context Required:**
    - All lead queries require `organizationId` in JWT
    - Missing org context = empty results (fail-secure)
    - Organization type determines filter logic
+   - **NEW**: Invalid initiative GUID mapping = fail-secure with empty results
 
 3. **Testing Considerations:**
    - Test with Foster-only users
    - Test with Volunteer-only users
    - Test with dual Foster/Volunteer users
    - Verify no cross-org data leakage
+   - **NEW**: Verify initiative GUID mapping works with real D365 data
+
+4. **Immediate TODO Before Production:**
+   - Obtain actual D365 Initiative GUIDs for Kentucky, Arkansas, Tennessee, Oklahoma
+   - Update `initiatives.config.ts` with real GUIDs
+   - Test queries return correct data for each initiative
+
+5. **Step 2 Focus (Shared Types Update):**
+   - Update the `Lead` interface in `packages/shared/src/types/lead.ts`
+   - Remove obsolete fields (firstName, lastName, priority, etc.)
+   - Add new fields from tc_everychildlead entity
+   - Update LeadStatus and LeadType enums to match D365 mappings
+   - Ensure type changes are backward compatible where possible
 
 *This charter represents a strategic exploration of decoupled architecture with multi-state initiative support. The initiative-based security model is non-negotiable and must be implemented from day one.*

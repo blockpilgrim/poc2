@@ -5,6 +5,7 @@ import compression from 'compression';
 
 // Import config
 import { config } from './config';
+import { validateInitiativesConfig } from './config/initiatives.config';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -59,9 +60,19 @@ app.use(errorHandler);
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {
+  // Validate initiatives configuration on startup
+  const isConfigValid = validateInitiativesConfig();
+  if (!isConfigValid && process.env.NODE_ENV === 'production') {
+    console.error('❌ Invalid initiatives configuration. Server startup aborted.');
+    process.exit(1);
+  }
+  
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📋 Environment: ${process.env.NODE_ENV || 'development'}`);
+    if (!isConfigValid) {
+      console.warn('⚠️  Initiatives configuration has issues - check logs above');
+    }
   });
 }
 

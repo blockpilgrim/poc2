@@ -1,4 +1,6 @@
 import { d365Service } from './d365.service';
+import { initiativeMappingService } from './initiative-mapping.service';
+import { getInitiativeIdFromGuid } from '../config/initiatives.config';
 import { AppError } from '../utils/errors';
 import type { 
   D365Filter, 
@@ -63,7 +65,21 @@ export class LeadService {
     if (!initiativeFilter.initiative) {
       throw new AppError('Initiative filter is required for all queries', 500);
     }
-    filters.push(`_tc_initiative_value eq '${this.escapeODataString(initiativeFilter.initiative)}'`);
+    
+    // Convert initiative ID to D365 GUID
+    let d365InitiativeGuid: string;
+    try {
+      d365InitiativeGuid = initiativeMappingService.getD365InitiativeGuid(initiativeFilter.initiative);
+    } catch (error) {
+      console.error('[LeadService] Failed to map initiative to D365 GUID:', {
+        initiative: initiativeFilter.initiative,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Return empty results rather than exposing internal error
+      throw new AppError('Invalid initiative configuration', 500);
+    }
+    
+    filters.push(`_tc_initiative_value eq '${this.escapeODataString(d365InitiativeGuid)}'`);
     
     // 3. Organization-based assignment filter
     // CRITICAL: Use organizationLeadType from JWT to determine correct filter
@@ -179,10 +195,21 @@ export class LeadService {
     // This is a temporary mapping until Step 2 updates the shared types
     const [firstName = '', lastName = ''] = (d365Lead.tc_contact?.fullname || '').split(' ', 2);
     
+    // Note: We keep the application initiative ID (e.g., 'ec-oregon') in the Lead object
+    // rather than the D365 GUID for consistency with the rest of the application
+    const initiativeId = getInitiativeIdFromGuid(d365Lead._tc_initiative_value || '');
+    
+    if (!initiativeId && d365Lead._tc_initiative_value) {
+      console.warn('[LeadService] Unknown D365 initiative GUID:', {
+        leadId: d365Lead.tc_everychildleadid,
+        unknownGuid: d365Lead._tc_initiative_value
+      });
+    }
+    
     return {
       id: d365Lead.tc_everychildleadid,
       d365Id: d365Lead.tc_everychildleadid,
-      initiativeId: d365Lead._tc_initiative_value || '',
+      initiativeId: initiativeId || '',
       
       // Contact Information (from expanded tc_contact)
       firstName,
@@ -365,12 +392,27 @@ export class LeadService {
       const d365Lead = await response.json() as D365EveryChildLead;
       
       // CRITICAL: Verify the lead belongs to the user's initiative
-      if (d365Lead._tc_initiative_value !== initiativeFilter.initiative) {
+      // Convert initiative ID to D365 GUID for comparison
+      let expectedD365Guid: string;
+      try {
+        expectedD365Guid = initiativeMappingService.getD365InitiativeGuid(initiativeFilter.initiative);
+      } catch (error) {
+        console.error('[LeadService] Failed to validate initiative for lead access:', {
+          initiative: initiativeFilter.initiative,
+          leadId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        // Fail securely - deny access if we can't validate
+        return null;
+      }
+      
+      if (d365Lead._tc_initiative_value !== expectedD365Guid) {
         console.warn('[LeadService] Cross-initiative access attempt:', {
           userId: initiativeFilter.userId,
           requestedLead: leadId,
           leadInitiative: d365Lead._tc_initiative_value,
-          userInitiative: initiativeFilter.initiative
+          userInitiative: initiativeFilter.initiative,
+          expectedGuid: expectedD365Guid
         });
         return null; // Return null as if not found - don't reveal it exists
       }

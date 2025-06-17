@@ -27,6 +27,7 @@
 - **[Backend Architecture](./backend-architecture.md)** - Core design principles and patterns
 - **[Backend API Reference](./backend-api-reference.md)** - Complete API endpoint documentation
 - **[D365 Integration Guide](./d365-integration-guide.md)** - Dynamics 365 data model and queries
+- **[Initiative GUID Configuration](./initiative-guid-configuration.md)** - Configuration-driven initiative mapping
 - **[Backend Troubleshooting](./backend-troubleshooting.md)** - Common issues and debugging guide
 
 ## Documentation Structure

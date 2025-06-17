@@ -72,10 +72,12 @@ GET /api/data/v9.2/{entity}?{query}
 ```
 
 ### Security Filtering
-All queries MUST include initiative filter:
+All queries MUST include initiative filter with D365 GUID:
 ```
-$filter=_tc_initiative_value eq '{initiativeId}'
+$filter=_tc_initiative_value eq '{initiativeGuid}'
 ```
+
+**Important**: The `_tc_initiative_value` field expects a D365 Initiative entity GUID, not the application initiative ID. The system automatically converts between application IDs (e.g., 'ec-oregon') and D365 GUIDs. See [Initiative GUID Configuration Guide](./initiative-guid-configuration.md) for details.
 
 ### Organization-Based Filtering
 
@@ -196,6 +198,8 @@ accountid eq '123e4567-e89b-12d3-a456-426614174000'
 accountid eq '{123e4567-e89b-12d3-a456-426614174000}'
 ```
 
+**Initiative GUIDs**: The `_tc_initiative_value` field stores D365 Initiative entity GUIDs. The application handles the mapping from friendly IDs (e.g., 'ec-oregon') to GUIDs automatically.
+
 ### 4. Date Filtering
 Use ISO 8601 format:
 ```
@@ -220,10 +224,11 @@ D365 provides a query builder at:
 
 ### Common Test Queries
 
-**Get Active Leads:**
+**Get Active Leads for Initiative:**
 ```
-/tc_everychildleads?$filter=statecode eq 0&$top=10
+/tc_everychildleads?$filter=statecode eq 0 and _tc_initiative_value eq 'b6ced3de-2993-ed11-aad1-6045bd006a3a'&$top=10
 ```
+Note: Replace with actual Initiative GUID from D365
 
 **Get Lead with Relationships:**
 ```
