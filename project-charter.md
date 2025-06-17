@@ -640,15 +640,33 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Phase:** Foundational Refactoring - Lead Data Source Realignment
-
-**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Step 2 Shared Types → IN PROGRESS | Step 3 Frontend → PENDING
+**Foundational Refactoring - Lead Data Source Realignment**
 
 **Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity.
 
+**Background & Problem Statement:**
+
+The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. The current implementation, therefore, fetches and displays the wrong data. This phase will address this foundational issue by refactoring the backend services, shared types, and frontend components to use `tc_everychildlead` as the single source of truth for leads.
+
+### Executive Summary of the Refined Strategy
+
+The core of this plan is to modify the backend's `lead.service.ts` to become a robust data aggregation and transformation layer. It will not just fetch `tc_everychildlead` records; it will construct a complete, UI-friendly `Lead` object by:
+
+1.  **Querying `tc_everychildlead`** as the base entity.
+2.  **Expanding to the related `Contact`** (`tc_contact`) to retrieve the lead subject's name and contact information, preserving the integrity of the existing UI components.
+3.  **Expanding to the owning `Contact`** (`tc_leadowner`) to display the internal owner of the lead.
+4.  **Implementing precise assignment logic** based on the user's organization type (`tc_organizationleadtype`).
+5.  **Transforming D365 option set integers** into the meaningful string literals required by the frontend.
+
+This approach ensures the frontend receives a clean, consistent data structure, minimizing its complexity and adhering to our architectural principle of a smart backend and a leaner frontend.
+
+**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Step 2 Shared Types → IN PROGRESS | Step 3 Frontend → PENDING
+
 ---
 
-### Step 1 Completion Summary (Backend Refactoring) ✅
+### Implementation Plan
+
+#### Step 1 Completion Summary (Backend Refactoring) ✅
 
 **What Was Completed:**
 1. **Lead Service Refactored** (`lead.service.ts`)
@@ -682,7 +700,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ---
 
-### Step 2: Shared Package (`packages/shared`) - The Data Contract
+#### Step 2: Shared Package (`packages/shared`) - The Data Contract
 
 **File to Modify: `src/types/lead.ts`**
 
@@ -768,7 +786,7 @@ The backend currently maps `tc_everychildlead` to the existing `Lead` interface 
 
 3. **Testing Considerations:**
    - Test with Foster-only users
-   - Test with Volunteer-only users  
+   - Test with Volunteer-only users
    - Test with dual Foster/Volunteer users
    - Verify no cross-org data leakage
 
