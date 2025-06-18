@@ -662,67 +662,131 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-### Recently Completed (This Session)
+### Backend Code Organization and Cleanup (Pragmatic Refactoring)
 
-1. **Role-Based Lead Pages**
-   - Implemented separate "Volunteer Leads" and "Ready Now Leads" pages
-   - Fixed Entra ID role names to use hyphens (e.g., "Foster-Partner")
-   - Admin users see "All Leads", others see only their role-specific pages
-   - No navigation shown for users without lead-related roles
+**Context**: Investigation revealed an abandoned refactoring attempt in `_unused_implementations` that was built for the wrong D365 data model (Contact entity instead of tc_everychildlead). The current implementation works with the correct data model but needs organization and cleanup for maintainability.
 
-2. **Inclusive Lead Filtering**
-   - Fixed D365 multi-select option set handling (tc_engagementinterest as comma-separated string)
-   - Implemented inclusive filtering where leads with multiple engagement interests appear on multiple pages
-   - Added `engagementInterest` field to Lead type for raw D365 values
-   - Preserved backward-compatible `type` field for single categorization
+**Goal**: Improve code clarity and organization WITHOUT major architectural changes or attempting to retrofit the abandoned code to the current data model.
 
-3. **Code Quality Improvements**
-   - Created centralized constants for roles (ENTRA_ID_ROLES) and leads (ENGAGEMENT_INTEREST)
-   - Replaced all hardcoded values with constants
-   - Added performance optimizations (useMemo, useCallback) to LeadTable
-   - Added warnings about client-side filtering scalability issues
+#### Phase 1: Extract and Organize (1 day)
+**Status**: Not started
+**Goal**: Improve clarity without changing functionality
 
-### Recommended Next Steps
+1. **Create utility modules** extracting useful patterns from abandoned code:
+   - `/backend/src/utils/d365/retry-helper.ts` - Retry logic with exponential backoff
+   - `/backend/src/utils/d365/odata-utils.ts` - OData query builders and string escaping
+   - `/backend/src/utils/d365/audit-logger.ts` - Structured logging for security events
+   - `/backend/src/utils/d365/error-parser.ts` - D365-specific error response parsing
+   - `/backend/src/utils/d365/field-mapper.ts` - Generic field mapping utility (if needed)
 
-1. **Server-Side Lead Filtering** (High Priority)
-   - Current implementation fetches ALL leads and filters client-side
-   - This won't scale with large datasets (1000+ leads)
-   - Backend needs to support type/engagement interest filtering in D365 queries
-   - Consider implementing: `GET /api/v1/leads?engagementInterest=948010000` (discussion needed)
+2. **Extract constants** from lead.service.ts:
+   - Move D365 field names to `/backend/src/constants/d365/lead-fields.ts`
+   - Create `/backend/src/constants/d365/query-constants.ts` for pagination limits, state codes, etc.
+   - Keep these backend-specific, not in shared package
 
-2. **Lead Creation Forms** (Medium Priority)
-   - Lead creation buttons are currently disabled
-   - This is a feature we don't actually need—not now, nor in the future. We need to remove all traces of lead creation functionality from the codebase.
+3. **Success criteria**: 
+   - All utilities tested and documented
+   - No changes to API behavior
+   - lead.service.ts imports from new locations
 
-3. **Complete Authentication Security** (High Priority)
-   - Several security items remain in the checklist:
-     - Upgrade JWT signing from HS256 to RS256
-     - Implement secure session management
-     - Add token revocation/blacklisting
-     - Complete refresh token handling
+#### Phase 2: Reduce Duplication (1 day)
+**Status**: Not started
+**Goal**: DRY up the code without architectural changes
 
-4. **Performance Monitoring** (Medium Priority)
-   - With client-side filtering, monitor lead table performance
-   - Consider implementing virtual scrolling for large datasets
-   - Add performance metrics to track load times
+1. **In lead.service.ts**:
+   - Extract duplicate field selection logic (lines 157-170 and 399-421) into class properties
+   - Create helper methods for common filter patterns
+   - Consolidate similar logging statements
 
-5. **Testing Coverage** (Medium Priority)
-   - Add tests for role-based navigation logic
-   - Test inclusive filtering with various engagement interest combinations
-   - Add E2E tests for the complete lead viewing flow
+2. **Add retry logic** to D365 API calls:
+   - Wrap fetch calls with RetryHelper
+   - Configure retry for transient failures (network, 503, etc.)
+   - Log retry attempts for monitoring
 
-### Technical Debt to Address
+3. **Success criteria**:
+   - No duplicate code blocks in lead.service.ts
+   - All D365 calls have retry capability
+   - Comprehensive test coverage for changes
 
-1. **Client-Side Filtering**: Temporary solution that needs backend support
-2. **Deprecated leadType prop**: Still supported for backward compatibility but should be removed
-3. **Disabled Features**: Status and type filters in UI are disabled pending backend support
+#### Phase 3: Improve Maintainability (1-2 days)
+**Status**: Not started
+**Goal**: Make the code easier to work with
 
-### Context for Next Session
+1. **Split complex methods**:
+   - Break `buildSecureODataFilter` (82 lines) into 4-5 focused methods:
+     - `validateInitiativeFilter()`
+     - `getActiveRecordFilter()`
+     - `getOrganizationFilter()`
+     - `getSearchFilter()`
+     - `combineFilters()`
+   - Each method should have single responsibility
 
-- Role constants are in `/src/constants/roles.ts` with helper functions
-- Lead constants are in `/src/constants/leads.ts` with engagement interest values
-- The dual approach (type vs engagementInterest) is intentional and documented
-- All role checks now use helper functions for consistency
-- Build passes but watch for Vite/Rollup issues with shared package exports
+2. **Add type safety**:
+   - Create `ODataQueryParams` interface for query building
+   - Type all field mappings with proper interfaces
+   - Add JSDoc comments explaining complex logic
 
-*This charter represents a strategic exploration of decoupled architecture with multi-state initiative support. The initiative-based security model is non-negotiable and must be implemented from day one.*
+3. **Improve error handling**:
+   - Use D365 error parser for better error messages
+   - Add structured error context (operation, entity, filters)
+   - Distinguish 404 (not found) from 403 (access denied)
+
+4. **Success criteria**:
+   - No methods longer than 30 lines
+   - Full TypeScript coverage (no `any` types)
+   - Clear error messages with actionable context
+
+#### Phase 4: Clean Up (0.5 day)
+**Status**: Not started
+**Goal**: Remove confusion and document reality
+
+1. **Delete obsolete code**:
+   - Remove entire `packages/backend/_unused_implementations` directory
+   - Archive old refactoring docs to `/docs/archive/`
+
+2. **Create accurate documentation**:
+   - `ARCHITECTURE.md` - Document actual current architecture
+   - `D365-INTEGRATION.md` - Explain tc_everychildlead entity model and field mappings
+   - Update README to reflect current implementation
+
+3. **Success criteria**:
+   - No abandoned code in codebase
+   - Clear documentation of what exists
+   - No conflicting or outdated docs
+
+### Implementation Notes for Future Sessions
+
+**Key Files to Focus On**:
+- Primary: `/backend/src/services/lead.service.ts` (489 lines)
+- Related: `/backend/src/services/d365.service.ts`, `/backend/src/services/initiative-mapping.service.ts`
+- Tests: `/backend/src/services/lead.service.test.ts`
+
+**Patterns to Extract from Abandoned Code** (cherry-pick only):
+- Retry logic from `_unused_implementations/d365/d365-client.service.ts`
+- OData utilities from `_unused_implementations/d365/d365-query-builder.service.ts`
+- Error parsing from `_unused_implementations/d365/d365-client.service.ts`
+- DO NOT use entity mappings or field names (wrong data model)
+
+**Critical Constraints**:
+- The current implementation uses `tc_everychildlead` entity - this is correct
+- The abandoned implementation uses `Contact` entity - this is wrong
+- Do not attempt to adapt Contact-based code to tc_everychildlead
+- Maintain backward compatibility - no breaking API changes
+
+**Testing Requirements**:
+- Run existing tests after each change: `npm test lead.service.test.ts`
+- Add new tests for extracted utilities
+- Verify no changes to API responses
+- Test with real D365 data if possible
+
+**Common Pitfalls to Avoid**:
+- Don't over-engineer utilities for a POC
+- Don't create abstractions that don't fit the data model
+- Don't change the working data flow
+- Don't mix frontend and backend constants
+
+**Success Metrics**:
+- Code coverage remains at or above current levels
+- No new TypeScript errors
+- API response times unchanged or improved
+- Zero breaking changes to API contract
