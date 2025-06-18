@@ -4,6 +4,8 @@
 
 The Lead Management UI provides a comprehensive interface for viewing, filtering, and managing leads within the Partner Portal. Built on top of our established state management (Phase 1) and data fetching (Phase 2) infrastructure, it demonstrates key patterns used throughout the application.
 
+> **Note:** This document covers the technical implementation. For understanding role-based access and how leads are filtered by type, see [Lead Access and Filtering Guide](./lead-access-and-filtering.md)
+
 ## Architecture
 
 ### Component Structure

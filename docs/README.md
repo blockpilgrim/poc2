@@ -17,6 +17,7 @@
 - **[Data Fetching Patterns](./data-fetching-patterns.md)** - Query patterns and examples
 
 ### UI Components & Features
+- **[Lead Access and Filtering](./lead-access-and-filtering.md)** 🔐 - Role-based pages and engagement interest filtering
 - **[Lead Management UI](./lead-management-ui.md)** - Architecture and patterns for lead features
 - **[Data Table Pattern](./data-table-pattern.md)** - Reusable table component guide
 - **[Initiative-Based Theming](./initiative-based-theming.md)** - Dynamic theming system
@@ -46,11 +47,12 @@
 2. Bookmark **[Shared Types Quick Reference](./shared-types-quick-reference.md)** for daily use
 
 #### Frontend Developers
-1. Start with **[Lead Management UI](./lead-management-ui.md)** for a complete feature example
-2. **Important:** Read **[Frontend Lead Refactoring](./frontend-lead-refactoring.md)** for current limitations
-3. Review **[State Management](./state-management.md)** to understand data flow
-4. Check **[Data Fetching](./data-fetching.md)** for API integration patterns
-5. Use **Quick Reference** guides for day-to-day tasks
+1. Start with **[Lead Access and Filtering](./lead-access-and-filtering.md)** to understand role-based access
+2. Then read **[Lead Management UI](./lead-management-ui.md)** for a complete feature example
+3. **Important:** Check **[Frontend Lead Refactoring](./frontend-lead-refactoring.md)** for current limitations
+4. Review **[State Management](./state-management.md)** to understand data flow
+5. Check **[Data Fetching](./data-fetching.md)** for API integration patterns
+6. Use **Quick Reference** guides for day-to-day tasks
 
 #### Backend Developers
 1. Start with **[Backend Architecture](./backend-architecture.md)** for design principles

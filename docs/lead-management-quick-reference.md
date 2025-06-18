@@ -1,5 +1,7 @@
 # Lead Management Quick Reference
 
+> **Note:** For understanding role-based access and lead filtering, see [Lead Access and Filtering Guide](./lead-access-and-filtering.md)
+
 ## Common Development Tasks
 
 ### Adding a New Lead Field to the Table
