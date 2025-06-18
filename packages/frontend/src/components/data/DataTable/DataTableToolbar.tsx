@@ -13,7 +13,7 @@ export function DataTableToolbar<TData>({
   table,
   searchPlaceholder = "Search...",
 }: DataTableToolbarProps<TData>) {
-  const search = useLeadSearch()
+  const search = useLeadSearch() || ''
   const { setLeadSearch, resetLeadFilters } = useFilterStore()
   const isFiltered = table.getState().columnFilters.length > 0 || search.length > 0
 

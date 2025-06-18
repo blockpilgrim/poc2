@@ -4,7 +4,7 @@ import { DataTable } from "../DataTable"
 import { getColumns } from "./columns"
 import { LeadTableFilters } from "./LeadTableFilters"
 import { EmptyLeadsState } from "@/components/leads/EmptyLeadsState"
-import { useFilterStore, useHasActiveFilters } from "@/stores/filterStore"
+import { useFilterStore, useHasActiveFilters, useFilterStoreHasHydrated } from "@/stores/filterStore"
 import { Lead } from "@partner-portal/shared"
 
 export function LeadTable() {
@@ -12,12 +12,24 @@ export function LeadTable() {
   const { data, isLoading } = useLeads()
   const { resetLeadFilters } = useFilterStore()
   const hasFilters = useHasActiveFilters()
+  const hasHydrated = useFilterStoreHasHydrated()
   
   const leads = data?.data || []
   const columns = getColumns(navigate)
 
   const handleRowClick = (lead: Lead) => {
     navigate(`/leads/${lead.id}`)
+  }
+
+  // Show loading state while filters are hydrating from localStorage
+  if (!hasHydrated) {
+    return (
+      <div className="rounded-md border bg-card p-8">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    )
   }
 
   if (!isLoading && leads.length === 0) {

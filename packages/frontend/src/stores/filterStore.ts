@@ -32,6 +32,9 @@ export interface TableFilters<T = Record<string, unknown>> {
 }
 
 interface FilterState {
+  // Hydration state
+  hasHydrated: boolean;
+  
   // Lead filters
   leadFilters: TableFilters<LeadFilters>;
   
@@ -93,6 +96,7 @@ export const useFilterStore = create<FilterState>()(
       persist(
         (set) => ({
           // Initial state
+          hasHydrated: false,
           leadFilters: defaultLeadTableFilters,
           tableFilters: {},
           
@@ -200,42 +204,90 @@ export const useFilterStore = create<FilterState>()(
         }),
         {
           name: 'filter-store',
+          version: 1, // Add version for migration
+          migrate: (persistedState: any, version: number) => {
+            // Migration from version 0 (or no version) to version 1
+            if (version === 0 || version === undefined) {
+              // Clear any corrupted state and return fresh defaults
+              return {
+                hasHydrated: false,
+                leadFilters: defaultLeadTableFilters,
+                tableFilters: {},
+              };
+            }
+            return persistedState;
+          },
           partialize: (state) => ({
             // Only persist specific filters, not pagination or transient state
             leadFilters: {
+              search: '', // Reset search on page reload
               filters: {
+                ...defaultLeadFilters, // Ensure all filter properties exist
                 status: state.leadFilters.filters.status,
                 type: state.leadFilters.filters.type,
               },
               sort: state.leadFilters.sort,
+              pagination: defaultPagination, // Always use default pagination on reload
             },
           }),
+          merge: (persistedState: any, currentState: FilterState) => {
+            // Ensure the persisted state has the complete structure
+            const mergedLeadFilters = {
+              ...defaultLeadTableFilters,
+              ...(persistedState?.leadFilters || {}),
+              filters: {
+                ...defaultLeadFilters,
+                ...(persistedState?.leadFilters?.filters || {}),
+              },
+              sort: persistedState?.leadFilters?.sort || defaultSort,
+              pagination: defaultPagination, // Always use default pagination
+            };
+
+            return {
+              ...currentState,
+              leadFilters: mergedLeadFilters,
+              tableFilters: persistedState?.tableFilters || {},
+            };
+          },
+          onRehydrateStorage: () => (state) => {
+            // Set hasHydrated to true after the store has been rehydrated
+            if (state) {
+              state.hasHydrated = true;
+            }
+          },
         }
       )
     )
   )
 );
 
-// Selectors for common use cases
-export const useLeadFilters = () => useFilterStore((state) => state.leadFilters);
-export const useLeadSearch = () => useFilterStore((state) => state.leadFilters.search);
-export const useLeadPagination = () => useFilterStore((state) => state.leadFilters.pagination);
-export const useLeadSort = () => useFilterStore((state) => state.leadFilters.sort);
+// Selectors for common use cases with defensive defaults
+export const useLeadFilters = () => useFilterStore((state) => state.leadFilters || defaultLeadTableFilters);
+export const useLeadSearch = () => useFilterStore((state) => state.leadFilters?.search || '');
+export const useLeadPagination = () => useFilterStore((state) => state.leadFilters?.pagination || defaultPagination);
+export const useLeadSort = () => useFilterStore((state) => state.leadFilters?.sort || defaultSort);
+
+/**
+ * Selector for hydration status
+ * @returns true if the store has been hydrated from localStorage, false otherwise
+ */
+export const useFilterStoreHasHydrated = () => useFilterStore((state) => state.hasHydrated);
 
 /**
  * Computed selector that determines if any filters are currently active
  * @returns true if any filters are applied, false otherwise
  */
 export const useHasActiveFilters = () => useFilterStore((state) => {
-  const { filters, search } = state.leadFilters;
+  const leadFilters = state.leadFilters || defaultLeadTableFilters;
+  const { filters, search } = leadFilters;
   return !!(
     search ||
-    filters.status ||
-    filters.type ||
-    filters.assignedToId ||
-    filters.assignedOrganizationId ||
-    filters.dateFrom ||
-    filters.dateTo
+    filters?.status ||
+    filters?.type ||
+    filters?.assignedToId ||
+    filters?.assignedOrganizationId ||
+    filters?.dateFrom ||
+    filters?.dateTo
   );
 });
 

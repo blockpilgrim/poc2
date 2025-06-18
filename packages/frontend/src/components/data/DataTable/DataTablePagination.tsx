@@ -21,18 +21,22 @@ export function DataTablePagination<TData>({
   const pagination = useLeadPagination()
   const { setLeadPagination } = useFilterStore()
 
+  // Default pagination values if store hasn't hydrated yet
+  const page = pagination?.page || 1
+  const pageSize = pagination?.pageSize || 25
+
   // Sync table pagination with filterStore only when pagination changes
   useEffect(() => {
     const currentPageIndex = table.getState().pagination.pageIndex
     const currentPageSize = table.getState().pagination.pageSize
     
-    if (currentPageIndex !== pagination.page - 1) {
-      table.setPageIndex(pagination.page - 1) // TanStack Table uses 0-based index
+    if (currentPageIndex !== page - 1) {
+      table.setPageIndex(page - 1) // TanStack Table uses 0-based index
     }
-    if (currentPageSize !== pagination.pageSize) {
-      table.setPageSize(pagination.pageSize)
+    if (currentPageSize !== pageSize) {
+      table.setPageSize(pageSize)
     }
-  }, [pagination.page, pagination.pageSize, table])
+  }, [page, pageSize, table])
 
   const handlePageChange = (newPage: number) => {
     setLeadPagination({ page: newPage })

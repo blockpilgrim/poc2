@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import type { PaginatedResponse, Lead } from '@partner-portal/shared';
 import { api } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
-import { useFilterStore } from '../../../stores/filterStore';
+import { useFilterStore, useFilterStoreHasHydrated } from '../../../stores/filterStore';
 import { useUIStore } from '../../../stores/uiStore';
 import { leadKeys } from '../queryKeys';
 import { handleApiError } from '../utils/errorHandling';
@@ -21,10 +21,15 @@ interface UseLeadsOptions {
 export const useLeads = (options?: UseLeadsOptions) => {
   const { initiative } = useAuthStore();
   const { leadFilters, setLeadPagination } = useFilterStore();
+  const hasHydrated = useFilterStoreHasHydrated();
   const { showToast } = useUIStore();
 
-  // Extract filters from store
-  const { search, sort, pagination } = leadFilters;
+  // Extract filters from store with defensive defaults
+  const { 
+    search = '', 
+    sort = { field: 'updatedAt', order: 'desc' }, 
+    pagination = { page: 1, pageSize: 25 } 
+  } = leadFilters || {};
 
   const query = useQuery({
     queryKey: leadKeys.list(initiative!, {
@@ -55,7 +60,7 @@ export const useLeads = (options?: UseLeadsOptions) => {
       return response.data;
     },
     ...standardDataOptions,
-    enabled: !!initiative && (options?.enabled ?? true),
+    enabled: !!initiative && hasHydrated && (options?.enabled ?? true),
   });
 
   // Update pagination state after successful query
