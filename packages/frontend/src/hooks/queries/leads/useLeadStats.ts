@@ -8,7 +8,6 @@ interface LeadStats {
   total: number;
   byStatus: Record<string, number>;
   byType: Record<string, number>;
-  byPriority: Record<string, number>;
   recentActivity: {
     created: number;
     updated: number;

@@ -23,19 +23,11 @@ export const useLeads = (options?: UseLeadsOptions) => {
   const { showToast } = useUIStore();
 
   // Extract filters from store
-  const { search, filters, sort, pagination } = leadFilters;
+  const { search, sort, pagination } = leadFilters;
 
   const query = useQuery({
     queryKey: leadKeys.list(initiative!, {
       search,
-      status: filters.status ?? undefined,
-      type: filters.type ?? undefined,
-      assignedToId: filters.assignedToId ?? undefined,
-      assignedOrganizationId: filters.assignedOrganizationId ?? undefined,
-      priority: filters.priority ?? undefined,
-      tags: filters.tags,
-      dateFrom: filters.dateFrom ?? undefined,
-      dateTo: filters.dateTo ?? undefined,
       sortBy: sort.field,
       sortOrder: sort.order,
       page: pagination.page,
@@ -55,15 +47,7 @@ export const useLeads = (options?: UseLeadsOptions) => {
           // Search
           search: search || undefined,
           
-          // Filters
-          status: filters.status || undefined,
-          type: filters.type || undefined,
-          assignedToId: filters.assignedToId || undefined,
-          assignedOrganizationId: filters.assignedOrganizationId || undefined,
-          priority: filters.priority || undefined,
-          tags: filters.tags?.length > 0 ? filters.tags : undefined,
-          dateFrom: filters.dateFrom || undefined,
-          dateTo: filters.dateTo || undefined,
+          // Currently only search filter is supported by backend
         },
       });
       

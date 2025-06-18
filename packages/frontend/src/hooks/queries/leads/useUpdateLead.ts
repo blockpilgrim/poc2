@@ -110,24 +110,25 @@ export const useUpdateLead = (options?: UseUpdateLeadOptions) => {
 
 /**
  * Hook to update lead status with confirmation
+ * @deprecated Modal component not yet implemented. Use useUpdateLead directly.
  */
-export const useUpdateLeadStatus = (options?: UseUpdateLeadOptions) => {
-  const { showModal } = useUIStore();
-  const updateLead = useUpdateLead(options);
+// export const useUpdateLeadStatus = (options?: UseUpdateLeadOptions) => {
+//   const { showModal } = useUIStore();
+//   const updateLead = useUpdateLead(options);
 
-  const updateStatus = (id: string, status: Lead['status']) => {
-    showModal({
-      type: 'confirm',
-      title: 'Update Lead Status',
-      message: `Are you sure you want to update the lead status to "${status}"?`,
-      onConfirm: () => {
-        updateLead.mutate({ id, data: { status } });
-      },
-    });
-  };
+//   const updateStatus = (id: string, status: Lead['status']) => {
+//     showModal({
+//       type: 'confirm',
+//       title: 'Update Lead Status',
+//       message: `Are you sure you want to update the lead status to "${status}"?`,
+//       onConfirm: () => {
+//         updateLead.mutate({ id, data: { status } });
+//       },
+//     });
+//   };
 
-  return {
-    ...updateLead,
-    updateStatus,
-  };
-};
+//   return {
+//     ...updateLead,
+//     updateStatus,
+//   };
+// };

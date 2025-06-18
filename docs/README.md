@@ -2,6 +2,7 @@
 
 ## Quick Start Guides
 
+- **[Feature Status Reference](./feature-status-reference.md)** ⚡ - What's working vs what's not (check this first!)
 - **[Lead Management Quick Reference](./lead-management-quick-reference.md)** - Common tasks and code locations for lead features
 - **[State Management Quick Reference](./state-management-quick-reference.md)** - Quick guide to using stores
 
@@ -32,6 +33,9 @@
 - **[Initiative GUID Configuration](./initiative-guid-configuration.md)** - Configuration-driven initiative mapping
 - **[Backend Troubleshooting](./backend-troubleshooting.md)** - Common issues and debugging guide
 
+### Implementation Status
+- **[Frontend Lead Refactoring](./frontend-lead-refactoring.md)** - Current state after tc_everychildlead migration
+
 ## Documentation Structure
 
 ### For New Team Members
@@ -42,9 +46,10 @@
 
 #### Frontend Developers
 1. Start with **[Lead Management UI](./lead-management-ui.md)** for a complete feature example
-2. Review **[State Management](./state-management.md)** to understand data flow
-3. Check **[Data Fetching](./data-fetching.md)** for API integration patterns
-4. Use **Quick Reference** guides for day-to-day tasks
+2. **Important:** Read **[Frontend Lead Refactoring](./frontend-lead-refactoring.md)** for current limitations
+3. Review **[State Management](./state-management.md)** to understand data flow
+4. Check **[Data Fetching](./data-fetching.md)** for API integration patterns
+5. Use **Quick Reference** guides for day-to-day tasks
 
 #### Backend Developers
 1. Start with **[Backend Architecture](./backend-architecture.md)** for design principles

@@ -20,8 +20,6 @@ export interface LeadFilters {
   type: LeadType | LeadType[] | null;
   assignedToId: string | null;
   assignedOrganizationId: string | null;
-  priority: string | null;
-  tags: string[];
   dateFrom: string | null;
   dateTo: string | null;
 }
@@ -41,16 +39,14 @@ interface FilterState {
   tableFilters: Record<string, TableFilters>;
   
   // Actions - Lead filters
-  setLeadSearch: (search: string) => void;
-  setLeadStatus: (status: LeadStatus | LeadStatus[] | null) => void;
-  setLeadType: (type: LeadType | LeadType[] | null) => void;
-  setLeadAssignee: (assignedToId: string | null) => void;
-  setLeadOrganization: (assignedOrganizationId: string | null) => void;
-  setLeadPriority: (priority: string | null) => void;
-  setLeadTags: (tags: string[]) => void;
-  setLeadDateRange: (dateFrom: string | null, dateTo: string | null) => void;
-  setLeadSort: (field: string, order?: 'asc' | 'desc') => void;
-  setLeadPagination: (pagination: Partial<Pagination>) => void;
+  setLeadSearch: (search: string) => void; // ✅ Functional
+  setLeadStatus: (status: LeadStatus | LeadStatus[] | null) => void; // 🚧 UI only - backend support coming
+  setLeadType: (type: LeadType | LeadType[] | null) => void; // 🚧 UI only - backend support coming
+  setLeadAssignee: (assignedToId: string | null) => void; // 🚧 Future feature
+  setLeadOrganization: (assignedOrganizationId: string | null) => void; // 🚧 Future feature
+  setLeadDateRange: (dateFrom: string | null, dateTo: string | null) => void; // 🚧 Future feature
+  setLeadSort: (field: string, order?: 'asc' | 'desc') => void; // ✅ Functional
+  setLeadPagination: (pagination: Partial<Pagination>) => void; // ✅ Functional
   resetLeadFilters: () => void;
   
   // Actions - Generic table filters
@@ -68,8 +64,6 @@ const defaultLeadFilters: LeadFilters = {
   type: null,
   assignedToId: null,
   assignedOrganizationId: null,
-  priority: null,
-  tags: [],
   dateFrom: null,
   dateTo: null,
 };
@@ -148,24 +142,6 @@ export const useFilterStore = create<FilterState>()(
               },
             })),
           
-          setLeadPriority: (priority) =>
-            set((state) => ({
-              leadFilters: {
-                ...state.leadFilters,
-                filters: { ...state.leadFilters.filters, priority },
-                pagination: { ...state.leadFilters.pagination, page: 1 },
-              },
-            })),
-          
-          setLeadTags: (tags) =>
-            set((state) => ({
-              leadFilters: {
-                ...state.leadFilters,
-                filters: { ...state.leadFilters.filters, tags },
-                pagination: { ...state.leadFilters.pagination, page: 1 },
-              },
-            })),
-          
           setLeadDateRange: (dateFrom, dateTo) =>
             set((state) => ({
               leadFilters: {
@@ -230,7 +206,6 @@ export const useFilterStore = create<FilterState>()(
               filters: {
                 status: state.leadFilters.filters.status,
                 type: state.leadFilters.filters.type,
-                priority: state.leadFilters.filters.priority,
               },
               sort: state.leadFilters.sort,
             },
@@ -259,8 +234,6 @@ export const useHasActiveFilters = () => useFilterStore((state) => {
     filters.type ||
     filters.assignedToId ||
     filters.assignedOrganizationId ||
-    filters.priority ||
-    filters.tags.length > 0 ||
     filters.dateFrom ||
     filters.dateTo
   );
@@ -268,26 +241,27 @@ export const useHasActiveFilters = () => useFilterStore((state) => {
 
 /**
  * Parses URL search parameters and returns filter configuration
- * Useful for deep linking and maintaining filter state across navigation
+ * Note: Currently only search, pagination, and sorting are functional
+ * Other filters are preserved for future backend support
  * @param searchParams - URLSearchParams object from the current URL
  * @returns Partial filter configuration to apply to the store
  */
 export const getLeadFiltersFromURL = (searchParams: URLSearchParams): Partial<TableFilters<LeadFilters>> => {
-  const filters: Partial<LeadFilters> = {};
-  
-  if (searchParams.has('status')) filters.status = searchParams.get('status') as LeadStatus;
-  if (searchParams.has('type')) filters.type = searchParams.get('type') as LeadType;
-  if (searchParams.has('assignedTo')) filters.assignedToId = searchParams.get('assignedTo');
-  if (searchParams.has('organization')) filters.assignedOrganizationId = searchParams.get('organization');
-  if (searchParams.has('priority')) filters.priority = searchParams.get('priority');
-  if (searchParams.has('dateFrom')) filters.dateFrom = searchParams.get('dateFrom');
-  if (searchParams.has('dateTo')) filters.dateTo = searchParams.get('dateTo');
-  
+  // Currently functional parameters
   const search = searchParams.get('search') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
   const pageSize = parseInt(searchParams.get('pageSize') || '25', 10);
   const sortField = searchParams.get('sortBy') || 'updatedAt';
   const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+  
+  // Parse future filter parameters (not yet functional)
+  const filters: Partial<LeadFilters> = {};
+  if (searchParams.has('status')) filters.status = searchParams.get('status') as LeadStatus;
+  if (searchParams.has('type')) filters.type = searchParams.get('type') as LeadType;
+  if (searchParams.has('assignedTo')) filters.assignedToId = searchParams.get('assignedTo');
+  if (searchParams.has('organization')) filters.assignedOrganizationId = searchParams.get('organization');
+  if (searchParams.has('dateFrom')) filters.dateFrom = searchParams.get('dateFrom');
+  if (searchParams.has('dateTo')) filters.dateTo = searchParams.get('dateTo');
   
   return {
     search,

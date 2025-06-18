@@ -6,13 +6,12 @@ interface LeadStatusBadgeProps {
 }
 
 const statusConfig: Record<LeadStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  new: { label: "New", variant: "default" },
-  contacted: { label: "Contacted", variant: "secondary" },
-  qualified: { label: "Qualified", variant: "default" },
-  in_progress: { label: "In Progress", variant: "default" },
-  converted: { label: "Converted", variant: "default" },
+  assigned: { label: "Assigned", variant: "default" },
+  "in-progress": { label: "In Progress", variant: "secondary" },
+  certified: { label: "Certified", variant: "default" },
+  "on-hold": { label: "On Hold", variant: "outline" },
   closed: { label: "Closed", variant: "outline" },
-  lost: { label: "Lost", variant: "destructive" },
+  other: { label: "Other", variant: "outline" },
 }
 
 export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {

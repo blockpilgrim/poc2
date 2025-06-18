@@ -5,7 +5,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useUIStore } from '../../../stores/uiStore';
 import { leadKeys } from '../queryKeys';
 
-type CreateLeadPayload = Omit<Lead, 'id' | 'd365Id' | 'createdAt' | 'updatedAt'>;
+type CreateLeadPayload = Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>;
 
 interface UseCreateLeadOptions {
   onSuccess?: (data: Lead) => void;

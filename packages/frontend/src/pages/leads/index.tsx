@@ -12,10 +12,6 @@ export default function LeadsPage() {
                        roles.includes('Foster Partner') ||
                        roles.includes('Volunteer Partner');
 
-  const handleCreateLead = () => {
-    // TODO: Implement create lead functionality
-    console.log('Create lead clicked');
-  };
 
   return (
     <div className="container mx-auto py-8">
@@ -27,7 +23,7 @@ export default function LeadsPage() {
           </p>
         </div>
         {canCreateLead && (
-          <Button onClick={handleCreateLead}>
+          <Button disabled className="opacity-50" title="Lead creation coming soon">
             <Plus className="mr-2 h-4 w-4" />
             New Lead
           </Button>

@@ -2,8 +2,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Lead } from "@partner-portal/shared"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { LeadTypeBadge } from "./LeadTypeBadge"
-import { LeadPriorityIndicator } from "./LeadPriorityIndicator"
-import { Mail, Phone, Calendar, Building } from "lucide-react"
+import { Mail, Calendar, Building } from "lucide-react"
 import { format } from "date-fns"
 
 interface LeadCardProps {
@@ -20,7 +19,7 @@ export function LeadCard({ lead, onClick }: LeadCardProps) {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <h3 className="font-semibold text-lg">{lead.displayName}</h3>
+            <h3 className="font-semibold text-lg">{lead.subjectName}</h3>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {lead.assignedOrganizationName && (
                 <div className="flex items-center gap-1">
@@ -30,7 +29,6 @@ export function LeadCard({ lead, onClick }: LeadCardProps) {
               )}
             </div>
           </div>
-          <LeadPriorityIndicator priority={lead.priority} />
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -40,16 +38,10 @@ export function LeadCard({ lead, onClick }: LeadCardProps) {
         </div>
         
         <div className="space-y-2 text-sm">
-          {lead.email && (
+          {lead.subjectEmail && (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Mail className="h-4 w-4" />
-              <span className="truncate">{lead.email}</span>
-            </div>
-          )}
-          {lead.phoneNumber && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Phone className="h-4 w-4" />
-              <span>{lead.phoneNumber}</span>
+              <span className="truncate">{lead.subjectEmail}</span>
             </div>
           )}
           <div className="flex items-center gap-2 text-muted-foreground">

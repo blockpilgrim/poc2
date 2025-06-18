@@ -12,10 +12,10 @@ import { useFilterStore } from "@/stores/filterStore"
 import { LeadStatus, LeadType } from "@partner-portal/shared"
 
 export function LeadTableFilters() {
-  const { leadFilters, setLeadStatus, setLeadType, setLeadPriority, setLeadSearch, resetLeadFilters } = useFilterStore()
+  const { leadFilters, setLeadStatus, setLeadType, setLeadSearch, resetLeadFilters } = useFilterStore()
   const { search, filters } = leadFilters
 
-  const hasFilters = filters.status || filters.type || filters.priority || search
+  const hasFilters = search
 
   return (
     <div className="flex items-center justify-between">
@@ -27,56 +27,45 @@ export function LeadTableFilters() {
           className="h-8 w-[150px] lg:w-[250px]"
         />
         
-        <Select
-          value={Array.isArray(filters.status) ? "all" : (filters.status || "all")}
-          onValueChange={(value) => setLeadStatus(value === "all" ? null : value as LeadStatus)}
-        >
-          <SelectTrigger className="h-8 w-[140px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="new">New</SelectItem>
-            <SelectItem value="contacted">Contacted</SelectItem>
-            <SelectItem value="qualified">Qualified</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="converted">Converted</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-            <SelectItem value="lost">Lost</SelectItem>
-          </SelectContent>
-        </Select>
+        <div title="Status filtering coming soon">
+          <Select
+            value={Array.isArray(filters.status) ? "all" : (filters.status || "all")}
+            onValueChange={(value) => setLeadStatus(value === "all" ? null : value as LeadStatus)}
+            disabled
+          >
+            <SelectTrigger className="h-8 w-[140px] opacity-50">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="assigned">Assigned</SelectItem>
+              <SelectItem value="in-progress">In Progress</SelectItem>
+              <SelectItem value="certified">Certified</SelectItem>
+              <SelectItem value="on-hold">On Hold</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={Array.isArray(filters.type) ? "all" : (filters.type || "all")}
-          onValueChange={(value) => setLeadType(value === "all" ? null : value as LeadType)}
-        >
-          <SelectTrigger className="h-8 w-[140px]">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="foster">Foster</SelectItem>
-            <SelectItem value="volunteer">Volunteer</SelectItem>
-            <SelectItem value="donor">Donor</SelectItem>
-            <SelectItem value="partner">Partner</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
+        <div title="Type filtering coming soon">
+          <Select
+            value={Array.isArray(filters.type) ? "all" : (filters.type || "all")}
+            onValueChange={(value) => setLeadType(value === "all" ? null : value as LeadType)}
+            disabled
+          >
+            <SelectTrigger className="h-8 w-[140px] opacity-50">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="foster">Foster</SelectItem>
+              <SelectItem value="volunteer">Volunteer</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={filters.priority || "all"}
-          onValueChange={(value) => setLeadPriority(value === "all" ? null : value)}
-        >
-          <SelectTrigger className="h-8 w-[140px]">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All priorities</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </SelectContent>
-        </Select>
 
         {hasFilters && (
           <Button

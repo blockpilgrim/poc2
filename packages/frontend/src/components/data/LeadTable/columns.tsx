@@ -2,7 +2,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Lead } from "@partner-portal/shared"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
-import { MoreHorizontal, Mail, Phone } from "lucide-react"
+import { MoreHorizontal, Mail } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +14,6 @@ import {
 import { DataTableColumnHeader } from "../DataTable"
 import { LeadStatusBadge } from "@/components/leads/LeadStatusBadge"
 import { LeadTypeBadge } from "@/components/leads/LeadTypeBadge"
-import { LeadPriorityIndicator } from "@/components/leads/LeadPriorityIndicator"
 import { format } from "date-fns"
 
 export const getColumns = (navigate: (path: string) => void): ColumnDef<Lead>[] => [
@@ -41,14 +40,14 @@ export const getColumns = (navigate: (path: string) => void): ColumnDef<Lead>[] 
     enableHiding: false,
   },
   {
-    accessorKey: "displayName",
+    accessorKey: "subjectName",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Name" />
     ),
     cell: ({ row }) => {
       return (
         <div className="flex flex-col">
-          <span className="font-medium">{row.getValue("displayName")}</span>
+          <span className="font-medium">{row.getValue("subjectName")}</span>
           {row.original.assignedOrganizationName && (
             <span className="text-sm text-muted-foreground">
               {row.original.assignedOrganizationName}
@@ -79,22 +78,12 @@ export const getColumns = (navigate: (path: string) => void): ColumnDef<Lead>[] 
     },
   },
   {
-    accessorKey: "priority",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Priority" />
-    ),
-    cell: ({ row }) => <LeadPriorityIndicator priority={row.getValue("priority")} />,
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
-    },
-  },
-  {
-    accessorKey: "email",
+    accessorKey: "subjectEmail",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Email" />
     ),
     cell: ({ row }) => {
-      const email = row.getValue("email") as string
+      const email = row.getValue("subjectEmail") as string
       return email ? (
         <Button
           variant="ghost"
@@ -107,29 +96,6 @@ export const getColumns = (navigate: (path: string) => void): ColumnDef<Lead>[] 
         >
           <Mail className="mr-2 h-4 w-4" />
           <span className="truncate">{email}</span>
-        </Button>
-      ) : null
-    },
-  },
-  {
-    accessorKey: "phoneNumber",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Phone" />
-    ),
-    cell: ({ row }) => {
-      const phone = row.getValue("phoneNumber") as string
-      return phone ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto p-0 font-normal"
-          onClick={(e) => {
-            e.stopPropagation()
-            window.location.href = `tel:${phone}`
-          }}
-        >
-          <Phone className="mr-2 h-4 w-4" />
-          <span>{phone}</span>
         </Button>
       ) : null
     },
@@ -184,24 +150,14 @@ export const getColumns = (navigate: (path: string) => void): ColumnDef<Lead>[] 
             >
               View details
             </DropdownMenuItem>
-            {lead.email && (
+            {lead.subjectEmail && (
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation()
-                  window.location.href = `mailto:${lead.email}`
+                  window.location.href = `mailto:${lead.subjectEmail}`
                 }}
               >
                 Send email
-              </DropdownMenuItem>
-            )}
-            {lead.phoneNumber && (
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation()
-                  window.location.href = `tel:${lead.phoneNumber}`
-                }}
-              >
-                Call
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>

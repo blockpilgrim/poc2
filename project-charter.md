@@ -241,6 +241,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Document backend architecture and API patterns (Complete - backend-architecture.md, backend-api-reference.md)
 - [x] Document D365 integration patterns (Complete - d365-integration-guide.md, backend-troubleshooting.md)
 - [x] Document shared types architecture (Complete - shared-types-architecture.md, shared-types-quick-reference.md)
+- [x] Document frontend refactoring and feature status (Complete - frontend-lead-refactoring.md, feature-status-reference.md)
 
 #### Basic Deployment & Monitoring
 - [ ] Configure Vite production builds
@@ -647,13 +648,74 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Foundational Refactoring - Lead Data Source Realignment & Initiative GUID Configuration**
+**Lead Data Source Refactoring Complete - Ready for MVP Features**
 
-**Objective:** Correct the application's core data model for "Leads" by transitioning from the D365 `Contact` entity to the `tc_everychildlead` entity, while ensuring proper initiative GUID mapping for D365 queries.
+**Latest Update (All 3 Steps Complete):** The foundational refactoring is complete. The application now correctly uses the `tc_everychildlead` entity with proper initiative GUID mapping. The frontend has been updated to handle the new data structure with graceful degradation for unavailable features.
 
-**Latest Update (Step 2 Complete):** The shared types have been updated to match the tc_everychildlead entity structure. This introduces breaking changes to the API response format. The backend is fully functional with the new types, but the frontend will not compile until Step 3 is implemented. See `BREAKING-CHANGES-STEP2.md` for details.
+**Current State Summary:**
+- ✅ Backend queries correct D365 entity with organization filtering
+- ✅ Shared types aligned with tc_everychildlead structure  
+- ✅ Frontend updated to display new data model
+- ✅ Search, pagination, and sorting fully functional
+- 🚧 Status/Type filtering UI present but backend not implemented
+- 🚧 Create/Update/Delete operations return 501 Not Implemented
+- 📚 Comprehensive documentation added for onboarding
 
-**Background & Problem Statement:**
+### Immediate Next Steps
+
+**Option 1: Enable Backend Filtering** (Recommended)
+- Implement status/type filtering in `lead.service.ts`
+- Update `lead.controller.ts` to accept and validate filter parameters
+- Remove `disabled` prop from frontend filter dropdowns
+- Test filtering works correctly with organization boundaries
+
+**Option 2: Implement Create/Update Operations**
+- Design create lead flow (which D365 fields are required?)
+- Implement POST /api/v1/leads endpoint
+- Re-enable PATCH /api/v1/leads/:id endpoint
+- Build modal component for UI confirmations
+- Enable frontend buttons and forms
+
+**Option 3: Complete MVP Features**
+- Review Feature Checklist "MVP Stage" section
+- Focus on security hardening (JWT RS256, session management)
+- Implement missing authentication features
+- Add comprehensive error handling
+
+### Critical Context for Next Session
+
+1. **Read These Docs First:**
+   - `docs/feature-status-reference.md` - Shows exactly what works vs what doesn't
+   - `docs/frontend-lead-refactoring.md` - Explains current UI limitations
+   - `packages/backend/BREAKING-CHANGES-STEP2.md` - API changes reference
+
+2. **Key Technical Decisions Made:**
+   - Frontend maintains all UI elements but disables non-functional ones
+   - Filter store tracks all filters even though only search works (for easy future activation)
+   - No modal component exists - modal-dependent hooks are commented out
+   - Backend returns 501 for unimplemented endpoints rather than removing them
+
+3. **Architecture Patterns Established:**
+   - Graceful degradation: Show everything, disable what doesn't work
+   - Clear user feedback: Tooltips explain why features are disabled
+   - Future-ready: Infrastructure in place for easy feature activation
+   - Fail-secure: Invalid data returns empty results, not errors
+
+4. **Known Limitations to Address:**
+   - Phone numbers and addresses no longer available (tc_everychildlead doesn't have them)
+   - Lead assignment changes not possible (no update endpoint)
+   - No way to add notes or tags to leads
+   - `leadScore` field available but not displayed anywhere
+
+5. **Testing Checklist:**
+   - ✅ Search functionality works
+   - ✅ Pagination works
+   - ✅ Sorting works
+   - ✅ Organization filtering automatic
+   - ❌ Status/Type filters need backend
+   - ❌ Create/Update need implementation
+
+**Original Background & Problem Statement:**
 
 The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. Additionally, during Step 1 implementation, we discovered that the `_tc_initiative_value` field in D365 expects Initiative entity GUIDs (e.g., `b6ced3de-2993-ed11-aad1-6045bd006a3a` for EC Oregon), not the application's string identifiers (e.g., `ec-oregon`).
 
@@ -669,7 +731,7 @@ The core of this plan is to modify the backend's `lead.service.ts` to become a r
 
 This approach ensures the frontend receives a clean, consistent data structure, minimizing its complexity and adhering to our architectural principle of a smart backend and a leaner frontend.
 
-**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Initiative GUID Mapping ✅ COMPLETE | Step 2 Shared Types ✅ COMPLETE | Step 3 Frontend → PENDING
+**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Initiative GUID Mapping ✅ COMPLETE | Step 2 Shared Types ✅ COMPLETE | Step 3 Frontend ✅ COMPLETE
 
 ---
 
@@ -799,7 +861,7 @@ This approach ensures the frontend receives a clean, consistent data structure, 
 - Status/Type enum values completely different
 - No backward compatibility maintained
 
-#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI and State** (NEXT STEPS)
+#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI and State** ✅
 
 **Critical Context for Implementation:**
 The frontend currently expects the old Lead interface structure and will NOT compile. The build errors in `npm run build:frontend` provide a complete list of all locations that need updating. Key files with errors:
@@ -863,6 +925,47 @@ The frontend currently expects the old Lead interface structure and will NOT com
 3. Run `npm run dev` to test UI functionality
 4. Verify search still works
 5. Test with different lead statuses/types
+
+#### Step 3 Completion Summary ✅
+
+**What Was Completed:**
+1. **Property Mapping Updates**
+   - All components updated to use new Lead properties
+   - `displayName` → `subjectName`, `email` → `subjectEmail`, etc.
+   - Removed references to obsolete properties (phoneNumber, priority, tags, etc.)
+
+2. **Component Updates**
+   - Lead table columns aligned with new structure
+   - Lead cards and detail page updated
+   - Status/Type badges updated with new enum values
+   - LeadPriorityIndicator component removed entirely
+
+3. **Filter Handling**
+   - Status/Type filters disabled with "coming soon" tooltips
+   - Filter store preserves state for future backend support
+   - Only search filter is functional (backend limitation)
+   - URL parameter parsing updated but maintains backward compatibility
+
+4. **Non-functional Features**
+   - Create/Edit lead buttons disabled with explanatory tooltips
+   - Modal-dependent hooks commented out (no modal component exists)
+   - Clear visual indicators for unavailable features
+
+5. **Code Quality Improvements**
+   - Fixed type error in useCreateLead hook
+   - Updated shared lead schemas to match new structure
+   - Added comprehensive documentation
+   - All TypeScript errors resolved, builds successfully
+
+**Key Architectural Decisions:**
+- **Graceful Degradation**: UI shows all features but disables non-functional ones
+- **Future-Ready**: Filter infrastructure maintained for easy activation
+- **User Feedback**: Clear tooltips explain why features are disabled
+- **No Breaking Changes**: Component interfaces preserved for future updates
+
+**Documentation Created:**
+- `docs/frontend-lead-refactoring.md` - Explains changes and current state
+- `docs/feature-status-reference.md` - Quick reference for what works vs what doesn't
 
 ---
 

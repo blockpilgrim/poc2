@@ -70,24 +70,25 @@ export const useBulkUpdateLeads = (options?: UseBulkUpdateLeadsOptions) => {
 
 /**
  * Hook to bulk update lead status with confirmation
+ * @deprecated Modal component not yet implemented. Use useBulkUpdateLeads directly.
  */
-export const useBulkUpdateLeadStatus = (options?: UseBulkUpdateLeadsOptions) => {
-  const { showModal } = useUIStore();
-  const bulkUpdate = useBulkUpdateLeads(options);
+// export const useBulkUpdateLeadStatus = (options?: UseBulkUpdateLeadsOptions) => {
+//   const { showModal } = useUIStore();
+//   const bulkUpdate = useBulkUpdateLeads(options);
 
-  const updateStatus = (ids: string[], status: Lead['status']) => {
-    showModal({
-      type: 'confirm',
-      title: 'Bulk Update Lead Status',
-      message: `Are you sure you want to update ${ids.length} lead(s) to status "${status}"?`,
-      onConfirm: () => {
-        bulkUpdate.mutate({ ids, data: { status } });
-      },
-    });
-  };
+//   const updateStatus = (ids: string[], status: Lead['status']) => {
+//     showModal({
+//       type: 'confirm',
+//       title: 'Bulk Update Lead Status',
+//       message: `Are you sure you want to update ${ids.length} lead(s) to status "${status}"?`,
+//       onConfirm: () => {
+//         bulkUpdate.mutate({ ids, data: { status } });
+//       },
+//     });
+//   };
 
-  return {
-    ...bulkUpdate,
-    updateStatus,
-  };
-};
+//   return {
+//     ...bulkUpdate,
+//     updateStatus,
+//   };
+// };

@@ -5,8 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Skeleton } from '../../components/ui/skeleton';
 import { LeadStatusBadge } from '../../components/leads/LeadStatusBadge';
 import { LeadTypeBadge } from '../../components/leads/LeadTypeBadge';
-import { LeadPriorityIndicator } from '../../components/leads/LeadPriorityIndicator';
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, User } from 'lucide-react';
+import { ArrowLeft, Mail, Calendar, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function LeadDetailPage() {
@@ -59,10 +58,12 @@ export default function LeadDetailPage() {
         
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{lead.displayName}</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{lead.subjectName}</h1>
             <p className="text-muted-foreground">Lead Details</p>
           </div>
-          <Button>Edit Lead</Button>
+          <Button disabled className="opacity-50" title="Lead editing coming soon">
+            Edit Lead
+          </Button>
         </div>
       </div>
 
@@ -76,47 +77,19 @@ export default function LeadDetailPage() {
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
               <div>
-                <div className="font-medium">{lead.firstName} {lead.lastName}</div>
+                <div className="font-medium">{lead.subjectName}</div>
                 <div className="text-sm text-muted-foreground">Full Name</div>
               </div>
             </div>
             
-            {lead.email && (
+            {lead.subjectEmail && (
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <a href={`mailto:${lead.email}`} className="font-medium hover:underline">
-                    {lead.email}
+                  <a href={`mailto:${lead.subjectEmail}`} className="font-medium hover:underline">
+                    {lead.subjectEmail}
                   </a>
                   <div className="text-sm text-muted-foreground">Email</div>
-                </div>
-              </div>
-            )}
-            
-            {lead.phoneNumber && (
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <a href={`tel:${lead.phoneNumber}`} className="font-medium hover:underline">
-                    {lead.phoneNumber}
-                  </a>
-                  <div className="text-sm text-muted-foreground">Phone</div>
-                </div>
-              </div>
-            )}
-            
-            {lead.address && (
-              <div className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
-                <div>
-                  <div className="font-medium">
-                    {lead.address.street1}
-                    {lead.address.street2 && <>, {lead.address.street2}</>}
-                  </div>
-                  <div className="font-medium">
-                    {lead.address.city}, {lead.address.state} {lead.address.zipCode}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Address</div>
                 </div>
               </div>
             )}
@@ -139,17 +112,6 @@ export default function LeadDetailPage() {
               <LeadTypeBadge type={lead.type} />
             </div>
             
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Priority</span>
-              <LeadPriorityIndicator priority={lead.priority} showLabel />
-            </div>
-            
-            {lead.source && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Source</span>
-                <span className="text-sm">{lead.source}</span>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -159,11 +121,11 @@ export default function LeadDetailPage() {
             <CardTitle>Assignment</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {lead.assignedToName ? (
+            {lead.leadOwnerName ? (
               <>
                 <div>
-                  <div className="font-medium">{lead.assignedToName}</div>
-                  <div className="text-sm text-muted-foreground">Assigned To</div>
+                  <div className="font-medium">{lead.leadOwnerName}</div>
+                  <div className="text-sm text-muted-foreground">Lead Owner</div>
                 </div>
                 
                 {lead.assignedOrganizationName && (
@@ -173,17 +135,6 @@ export default function LeadDetailPage() {
                   </div>
                 )}
                 
-                {lead.assignedAt && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="font-medium">
-                        {formatDistanceToNow(new Date(lead.assignedAt), { addSuffix: true })}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Assigned</div>
-                    </div>
-                  </div>
-                )}
               </>
             ) : (
               <p className="text-muted-foreground">This lead is not currently assigned</p>
@@ -216,53 +167,8 @@ export default function LeadDetailPage() {
                 <div className="text-sm text-muted-foreground">Last Updated</div>
               </div>
             </div>
-            
-            {lead.lastContactedAt && (
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="font-medium">
-                    {formatDistanceToNow(new Date(lead.lastContactedAt), { addSuffix: true })}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Last Contacted</div>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
-
-        {/* Notes */}
-        {lead.notes && (
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-wrap">{lead.notes}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Tags */}
-        {lead.tags && lead.tags.length > 0 && (
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Tags</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {lead.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
