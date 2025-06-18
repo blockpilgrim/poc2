@@ -21,10 +21,16 @@ export interface Lead {
 
   // Mapped status and type fields for clear UI display.
   status: LeadStatus;
-  type: LeadType;
+  type: LeadType; // Single type derived from engagement interest (foster takes priority if both)
 
   // Raw score for future UI implementation.
   leadScore?: number; // from tc_leadscore2
+  
+  // Raw engagement interest value from D365 for inclusive filtering
+  // This field contains the actual multi-select values from D365 (e.g., "948010000,948010001")
+  // Used for inclusive filtering where leads can appear on multiple pages
+  // While 'type' provides a single categorization, 'engagementInterest' preserves all values
+  engagementInterest?: string; // from tc_engagementinterest (comma-separated values)
 
   initiativeId: string; // CRITICAL: Initiative this lead belongs to
   createdAt: Date;

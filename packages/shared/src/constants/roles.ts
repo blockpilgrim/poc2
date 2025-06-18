@@ -1,6 +1,19 @@
 import { RoleName, Permission } from '../types/user';
 
 /**
+ * Entra ID role names - using exact format from Azure AD
+ */
+export const ENTRA_ID_ROLES = {
+  ADMIN: 'Admin',
+  FOSTER_PARTNER: 'Foster-Partner',
+  FOSTER_NETWORK_WIDE_PARTNER: 'Foster-Network-Wide-Partner',
+  VOLUNTEER_PARTNER: 'Volunteer-Partner',
+  VOLUNTEER_NETWORK_WIDE_PARTNER: 'Volunteer-Network-Wide-Partner',
+} as const;
+
+export type EntraIdRole = typeof ENTRA_ID_ROLES[keyof typeof ENTRA_ID_ROLES];
+
+/**
  * Role definitions and their associated permissions
  */
 export const ROLE_PERMISSIONS: Record<RoleName, Permission[]> = {

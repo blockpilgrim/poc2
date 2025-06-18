@@ -10,8 +10,13 @@ import {
 } from "@/components/ui/select"
 import { useFilterStore } from "@/stores/filterStore"
 import { LeadStatus, LeadType } from "@partner-portal/shared"
+import { LEAD_STATUS, LEAD_TYPE, LEAD_UI_MESSAGES } from "@/constants/leads"
 
-export function LeadTableFilters() {
+interface LeadTableFiltersProps {
+  hideTypeFilter?: boolean;
+}
+
+export function LeadTableFilters({ hideTypeFilter = false }: LeadTableFiltersProps) {
   const { leadFilters, setLeadStatus, setLeadType, setLeadSearch, resetLeadFilters } = useFilterStore()
   const { search, filters } = leadFilters
 
@@ -27,7 +32,7 @@ export function LeadTableFilters() {
           className="h-8 w-[150px] lg:w-[250px]"
         />
         
-        <div title="Status filtering coming soon">
+        <div title={LEAD_UI_MESSAGES.FILTERS.STATUS_COMING_SOON}>
           <Select
             value={Array.isArray(filters.status) ? "all" : (filters.status || "all")}
             onValueChange={(value) => setLeadStatus(value === "all" ? null : value as LeadStatus)}
@@ -38,33 +43,35 @@ export function LeadTableFilters() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="assigned">Assigned</SelectItem>
-              <SelectItem value="in-progress">In Progress</SelectItem>
-              <SelectItem value="certified">Certified</SelectItem>
-              <SelectItem value="on-hold">On Hold</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              <SelectItem value={LEAD_STATUS.ASSIGNED}>Assigned</SelectItem>
+              <SelectItem value={LEAD_STATUS.IN_PROGRESS}>In Progress</SelectItem>
+              <SelectItem value={LEAD_STATUS.CERTIFIED}>Certified</SelectItem>
+              <SelectItem value={LEAD_STATUS.ON_HOLD}>On Hold</SelectItem>
+              <SelectItem value={LEAD_STATUS.CLOSED}>Closed</SelectItem>
+              <SelectItem value={LEAD_STATUS.OTHER}>Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div title="Type filtering coming soon">
-          <Select
-            value={Array.isArray(filters.type) ? "all" : (filters.type || "all")}
-            onValueChange={(value) => setLeadType(value === "all" ? null : value as LeadType)}
-            disabled
-          >
-            <SelectTrigger className="h-8 w-[140px] opacity-50">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="foster">Foster</SelectItem>
-              <SelectItem value="volunteer">Volunteer</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {!hideTypeFilter && (
+          <div title={LEAD_UI_MESSAGES.FILTERS.TYPE_COMING_SOON}>
+            <Select
+              value={Array.isArray(filters.type) ? "all" : (filters.type || "all")}
+              onValueChange={(value) => setLeadType(value === "all" ? null : value as LeadType)}
+              disabled
+            >
+              <SelectTrigger className="h-8 w-[140px] opacity-50">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value={LEAD_TYPE.FOSTER}>Foster</SelectItem>
+                <SelectItem value={LEAD_TYPE.VOLUNTEER}>Volunteer</SelectItem>
+                <SelectItem value={LEAD_TYPE.OTHER}>Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
 
         {hasFilters && (

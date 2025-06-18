@@ -22,7 +22,7 @@ interface D365EveryChildLead {
   tc_everychildleadid: string;
   tc_name: string;
   tc_ecleadlifecyclestatus?: number;
-  tc_engagementinterest?: number;
+  tc_engagementinterest?: string; // Multi-select option set returns comma-separated string
   tc_leadscore2?: number;
   statecode: number;
   createdon: string;
@@ -252,6 +252,7 @@ export class LeadService {
       status: mapLeadStatus(d365Lead.tc_ecleadlifecyclestatus) as LeadStatus,
       type: mapLeadType(d365Lead.tc_engagementinterest) as LeadType,
       leadScore: d365Lead.tc_leadscore2,
+      engagementInterest: d365Lead.tc_engagementinterest,
       
       // Organization assignment from JWT context
       assignedOrganizationId: userOrganization?.id,

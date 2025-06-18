@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 import { LeadStatus, LeadType } from '@partner-portal/shared';
+import { DEFAULT_FILTERS } from '@/constants/leads';
 
 export interface TableSort {
   field: string;
@@ -62,9 +63,9 @@ interface FilterState {
 
 // Default values
 const defaultLeadFilters: LeadFilters = {
-  search: '',
-  status: null,
-  type: null,
+  search: DEFAULT_FILTERS.SEARCH,
+  status: DEFAULT_FILTERS.STATUS,
+  type: DEFAULT_FILTERS.TYPE,
   assignedToId: null,
   assignedOrganizationId: null,
   dateFrom: null,
@@ -72,15 +73,15 @@ const defaultLeadFilters: LeadFilters = {
 };
 
 const defaultPagination: Pagination = {
-  page: 1,
-  pageSize: 25,
+  page: DEFAULT_FILTERS.PAGE,
+  pageSize: DEFAULT_FILTERS.PAGE_SIZE,
   totalItems: 0,
   totalPages: 0,
 };
 
 const defaultSort: TableSort = {
-  field: 'updatedAt',
-  order: 'desc',
+  field: DEFAULT_FILTERS.SORT_FIELD,
+  order: DEFAULT_FILTERS.SORT_ORDER,
 };
 
 const defaultLeadTableFilters: TableFilters<LeadFilters> = {
@@ -300,11 +301,11 @@ export const useHasActiveFilters = () => useFilterStore((state) => {
  */
 export const getLeadFiltersFromURL = (searchParams: URLSearchParams): Partial<TableFilters<LeadFilters>> => {
   // Currently functional parameters
-  const search = searchParams.get('search') || '';
-  const page = parseInt(searchParams.get('page') || '1', 10);
-  const pageSize = parseInt(searchParams.get('pageSize') || '25', 10);
-  const sortField = searchParams.get('sortBy') || 'updatedAt';
-  const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+  const search = searchParams.get('search') || DEFAULT_FILTERS.SEARCH;
+  const page = parseInt(searchParams.get('page') || String(DEFAULT_FILTERS.PAGE), 10);
+  const pageSize = parseInt(searchParams.get('pageSize') || String(DEFAULT_FILTERS.PAGE_SIZE), 10);
+  const sortField = searchParams.get('sortBy') || DEFAULT_FILTERS.SORT_FIELD;
+  const sortOrder = (searchParams.get('sortOrder') || DEFAULT_FILTERS.SORT_ORDER) as 'asc' | 'desc';
   
   // Parse future filter parameters (not yet functional)
   const filters: Partial<LeadFilters> = {};

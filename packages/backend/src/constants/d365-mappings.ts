@@ -112,13 +112,33 @@ export function mapLeadStatus(statusValue: number | null | undefined): string {
 
 /**
  * Helper function to infer lead type from engagement interest
+ * Handles multi-select option set values (comma-separated string)
  * Prioritizes 'foster' if both types are present
  */
-export function mapLeadType(engagementInterest: number | null | undefined): string {
+export function mapLeadType(engagementInterest: string | number | null | undefined): string {
   if (engagementInterest === null || engagementInterest === undefined) {
     return LEAD_DEFAULTS.TYPE;
   }
-  return ENGAGEMENT_INTEREST_MAP[engagementInterest] || LEAD_DEFAULTS.TYPE;
+  
+  // Convert to string to handle both string and number inputs
+  const interestStr = String(engagementInterest);
+  
+  // Check if it contains foster interest (948010000)
+  if (interestStr.includes('948010000')) {
+    return 'foster';
+  }
+  
+  // Check if it contains volunteer interest (948010001)
+  if (interestStr.includes('948010001')) {
+    return 'volunteer';
+  }
+  
+  // For backward compatibility, also check direct number mapping
+  if (typeof engagementInterest === 'number' && ENGAGEMENT_INTEREST_MAP[engagementInterest]) {
+    return ENGAGEMENT_INTEREST_MAP[engagementInterest];
+  }
+  
+  return LEAD_DEFAULTS.TYPE;
 }
 
 /**

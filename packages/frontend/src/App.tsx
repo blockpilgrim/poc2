@@ -13,6 +13,8 @@ import { Header } from './components/layout/Header'
 import { ProfilePage } from './pages/profile/Profile'
 import LeadsPage from './pages/leads'
 import LeadDetailPage from './pages/leads/[id]'
+import VolunteerLeadsPage from './pages/leads/volunteer'
+import ReadyNowLeadsPage from './pages/leads/ready-now'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +56,8 @@ function AppContent() {
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/leads/volunteer" element={<VolunteerLeadsPage />} />
+            <Route path="/leads/ready-now" element={<ReadyNowLeadsPage />} />
             <Route path="/leads/:id" element={<LeadDetailPage />} />
             {/* Add more protected routes here */}
           </Route>

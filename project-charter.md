@@ -94,12 +94,12 @@ Microsoft Entra ID groups serve as the **hard security boundary**:
 Microsoft Entra ID App Roles will define user permissions. The roles are designed to provide granular access based on user responsibilities and organizational structure:
 
 -   **Admin**: Retains full access to all features and administrative functions within their assigned initiative.
--   **Foster Partner**: Granted access to all portal features specifically related to foster journeys, but this access is restricted to foster journeys associated with the user's own organization.
--   **Volunteer Partner**: Granted access to all portal features specifically related to volunteer journeys, with access limited to volunteer journeys associated with the user's own organization.
--   **Volunteer Network-Wide Partner**: Possesses comprehensive access to all portal features concerning volunteer journeys, with the ability to view and manage volunteer journeys across all participating organizations within the network.
--   **Foster Network-Wide Partner**: Possesses comprehensive access to all portal features concerning foster journeys, with the ability to view and manage foster journeys across all participating organizations within the network.
+-   **Foster-Partner**: Granted access to all portal features specifically related to foster journeys, but this access is restricted to foster journeys associated with the user's own organization.
+-   **Volunteer-Partner**: Granted access to all portal features specifically related to volunteer journeys, with access limited to volunteer journeys associated with the user's own organization.
+-   **Volunteer-Network-Wide-Partner**: Possesses comprehensive access to all portal features concerning volunteer journeys, with the ability to view and manage volunteer journeys across all participating organizations within the network.
+-   **Foster-Network-Wide-Partner**: Possesses comprehensive access to all portal features concerning foster journeys, with the ability to view and manage foster journeys across all participating organizations within the network.
 
-Roles will be assigned in Microsoft Entra ID and will be included as claims in the JWT, enabling the application to enforce permissions accordingly.
+Roles will be assigned in Microsoft Entra ID and will be included as claims in the JWT, enabling the application to enforce permissions accordingly. Note: Role names use hyphens (e.g., "Foster-Partner") as per Entra ID configuration.
 
 ## Feature Checklist
 
@@ -149,6 +149,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Verify D365 queries respect initiative boundaries (implemented in lead service)
 - [x] **CRITICAL**: Implement tc_everychildlead queries with organization filtering
 - [x] **CRITICAL**: Implement configuration-driven initiative GUID mapping for D365 queries
+- [x] **NEW**: Fix D365 multi-select option set handling (tc_engagementinterest as comma-separated string)
 
 #### Basic UI Foundation
 - [x] Configure Tailwind CSS (latest stable) and migrate design tokens
@@ -232,6 +233,8 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Add initiative branding components (logos, colors in Header)
 - [x] Connect UI to structured state stores (Complete - TanStack Query hooks integrated with filterStore and uiStore)
 - [x] **CRITICAL**: Create data display components (tables, lists, cards) - Lead components complete
+- [x] **NEW**: Implement role-based navigation (separate "Volunteer Leads" and "Ready Now Leads" pages)
+- [x] **NEW**: Create inclusive lead filtering by engagement interest values
 
 #### Security & Environment Configuration
 - [ ] Configure CORS for frontend domain
@@ -247,6 +250,8 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Document D365 integration patterns (Complete - d365-integration-guide.md, backend-troubleshooting.md)
 - [x] Document shared types architecture (Complete - shared-types-architecture.md, shared-types-quick-reference.md)
 - [x] Document frontend refactoring and feature status (Complete - frontend-lead-refactoring.md, feature-status-reference.md)
+- [x] **NEW**: Create centralized constants for lead management (engagement interest values, UI messages)
+- [x] **NEW**: Create role constants and helper functions for consistent role checks
 
 #### Basic Deployment & Monitoring
 - [ ] Configure Vite production builds
@@ -482,7 +487,7 @@ interface JWTPayload {
   sub: string;
   email: string;
   groups: string[]; // Entra ID security groups (e.g., ["Partner Portal - EC Arkansas", "Partner Portal - EC Oregon - Testing"])
-  roles: string[]; // Entra ID app roles (e.g., ["Admin", "Foster Partner", "Volunteer Network-Wide Partner"])
+  roles: string[]; // Entra ID app roles (e.g., ["Admin", "Foster-Partner", "Volunteer-Network-Wide-Partner"])
   initiative: string; // Primary initiative derived from groups
   exp: number;
 }
@@ -657,51 +662,67 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Status** Have been focusing on critical D365 query issues that were preventing the `/leads` page from loading. The application seems to now be correctly querying D365, but there are other issues we're uncovering which may be preventing the `/leads` page from loading.
+### Recently Completed (This Session)
 
+1. **Role-Based Lead Pages**
+   - Implemented separate "Volunteer Leads" and "Ready Now Leads" pages
+   - Fixed Entra ID role names to use hyphens (e.g., "Foster-Partner")
+   - Admin users see "All Leads", others see only their role-specific pages
+   - No navigation shown for users without lead-related roles
 
-### Files Changed in Most Recent Session
+2. **Inclusive Lead Filtering**
+   - Fixed D365 multi-select option set handling (tc_engagementinterest as comma-separated string)
+   - Implemented inclusive filtering where leads with multiple engagement interests appear on multiple pages
+   - Added `engagementInterest` field to Lead type for raw D365 values
+   - Preserved backward-compatible `type` field for single categorization
 
-**Backend Core Changes:**
-- `packages/backend/src/constants/d365-mappings.ts`
-  - Added `VOLUNTEER_ORG_RELATIONSHIP` constant with correct navigation property
-  - Created `SORT_FIELD_MAP` for frontend→D365 field mapping
-  - Added `mapSortField()` helper function
-  - Removed deprecated field mappings
+3. **Code Quality Improvements**
+   - Created centralized constants for roles (ENTRA_ID_ROLES) and leads (ENGAGEMENT_INTEREST)
+   - Replaced all hardcoded values with constants
+   - Added performance optimizations (useMemo, useCallback) to LeadTable
+   - Added warnings about client-side filtering scalability issues
 
-- `packages/backend/src/services/lead.service.ts`
-  - Updated volunteer org filter to use correct navigation property
-  - Integrated field mapping for sorting
-  - Enhanced security validation for organizationLeadType
-  - Removed legacy backward compatibility code
+### Recommended Next Steps
 
-- `packages/backend/src/controllers/lead.controller.ts`
-  - Fixed parameter naming (accepts both pageSize and limit)
-  - Updated response format to match frontend expectations
-  - Changed default sort field to 'updatedAt' (matches frontend)
+1. **Server-Side Lead Filtering** (High Priority)
+   - Current implementation fetches ALL leads and filters client-side
+   - This won't scale with large datasets (1000+ leads)
+   - Backend needs to support type/engagement interest filtering in D365 queries
+   - Consider implementing: `GET /api/v1/leads?engagementInterest=948010000` (discussion needed)
 
-**Test Updates:**
-- `packages/backend/src/services/__tests__/lead.service.test.ts`
-  - Updated tests for new navigation property
-  - Added sort field mapping tests
-  - Added security validation tests
-  - Added edge case coverage (19 tests total)
+2. **Lead Creation Forms** (Medium Priority)
+   - Lead creation buttons are currently disabled
+   - This is a feature we don't actually need—not now, nor in the future. We need to remove all traces of lead creation functionality from the codebase.
 
-**Documentation Updates:**
-- `docs/d365-integration-guide.md` - Updated with correct navigation property and field mappings
-- `docs/lead-management-quick-reference.md` - Fixed volunteer organization filter example
+3. **Complete Authentication Security** (High Priority)
+   - Several security items remain in the checklist:
+     - Upgrade JWT signing from HS256 to RS256
+     - Implement secure session management
+     - Add token revocation/blacklisting
+     - Complete refresh token handling
 
-### Summary of Recent Fixes
+4. **Performance Monitoring** (Medium Priority)
+   - With client-side filtering, monitor lead table performance
+   - Consider implementing virtual scrolling for large datasets
+   - Add performance metrics to track load times
 
-The application was experiencing D365 Web API errors that prevented the leads page from loading. We fixed three critical issues:
+5. **Testing Coverage** (Medium Priority)
+   - Add tests for role-based navigation logic
+   - Test inclusive filtering with various engagement interest combinations
+   - Add E2E tests for the complete lead viewing flow
 
-1. **Navigation Property Error**: The volunteer organization relationship was using an incorrect property name. We discovered the correct name by examining D365 metadata and updated it throughout the codebase.
+### Technical Debt to Address
 
-2. **Sort Field Error**: D365 was rejecting sort requests because it doesn't recognize frontend field names like 'updatedAt'. We implemented a comprehensive field mapping system that translates frontend names to D365 names.
+1. **Client-Side Filtering**: Temporary solution that needs backend support
+2. **Deprecated leadType prop**: Still supported for backward compatibility but should be removed
+3. **Disabled Features**: Status and type filters in UI are disabled pending backend support
 
-3. **Parameter Mismatches**: The frontend and backend were using different parameter names for pagination, causing features to silently fail. We aligned these across the stack.
+### Context for Next Session
 
-All fixes follow the principle of fail-secure behavior - invalid data or configuration results in empty results rather than exposing errors or data. The codebase is now more maintainable with centralized constants, comprehensive tests, and clear documentation of D365 quirks.
-
+- Role constants are in `/src/constants/roles.ts` with helper functions
+- Lead constants are in `/src/constants/leads.ts` with engagement interest values
+- The dual approach (type vs engagementInterest) is intentional and documented
+- All role checks now use helper functions for consistency
+- Build passes but watch for Vite/Rollup issues with shared package exports
 
 *This charter represents a strategic exploration of decoupled architecture with multi-state initiative support. The initiative-based security model is non-negotiable and must be implemented from day one.*

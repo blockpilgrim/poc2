@@ -7,6 +7,7 @@ import { LeadStatusBadge } from '../../components/leads/LeadStatusBadge';
 import { LeadTypeBadge } from '../../components/leads/LeadTypeBadge';
 import { ArrowLeft, Mail, Calendar, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { LEAD_UI_MESSAGES } from '../../constants/leads';
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,7 +62,7 @@ export default function LeadDetailPage() {
             <h1 className="text-3xl font-bold tracking-tight">{lead.subjectName}</h1>
             <p className="text-muted-foreground">Lead Details</p>
           </div>
-          <Button disabled className="opacity-50" title="Lead editing coming soon">
+          <Button disabled className="opacity-50" title={LEAD_UI_MESSAGES.ACTIONS.CREATE_COMING_SOON}>
             Edit Lead
           </Button>
         </div>

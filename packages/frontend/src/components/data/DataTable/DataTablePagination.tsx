@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select"
 import { useLeadPagination, useFilterStore } from "@/stores/filterStore"
 import { useEffect } from "react"
+import { PAGINATION_OPTIONS, DEFAULT_FILTERS } from "@/constants/leads"
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>
@@ -22,8 +23,8 @@ export function DataTablePagination<TData>({
   const { setLeadPagination } = useFilterStore()
 
   // Default pagination values if store hasn't hydrated yet
-  const page = pagination?.page || 1
-  const pageSize = pagination?.pageSize || 25
+  const page = pagination?.page || DEFAULT_FILTERS.PAGE
+  const pageSize = pagination?.pageSize || DEFAULT_FILTERS.PAGE_SIZE
 
   // Sync table pagination with filterStore only when pagination changes
   useEffect(() => {
@@ -66,7 +67,7 @@ export function DataTablePagination<TData>({
               <SelectValue placeholder={table.getState().pagination.pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
-              {[10, 20, 30, 40, 50].map((pageSize) => (
+              {PAGINATION_OPTIONS.PAGE_SIZES.map((pageSize) => (
                 <SelectItem key={pageSize} value={`${pageSize}`}>
                   {pageSize}
                 </SelectItem>

@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { authService } from '@/services/authService';
 import { getUserInitials } from '@/utils/userHelpers';
+import { hasVolunteerRole, hasFosterRole, hasAdminRole } from '@/constants/roles';
 
 const DEFAULT_THEME_COLOR = '#007ACC';
 
 export function Header() {
-  const { user, theme, isAuthenticated } = useAuthStore();
+  const { user, theme, isAuthenticated, roles } = useAuthStore();
 
   const handleLogout = async () => {
     try {
@@ -59,12 +60,31 @@ export function Header() {
                 >
                   Home
                 </Link>
-                <Link
-                  to="/leads"
-                  className="text-sm font-medium transition-colors hover:text-primary"
-                >
-                  Leads
-                </Link>
+                {/* Role-based lead navigation */}
+                {hasVolunteerRole(roles) && (
+                  <Link
+                    to="/leads/volunteer"
+                    className="text-sm font-medium transition-colors hover:text-primary"
+                  >
+                    Volunteer Leads
+                  </Link>
+                )}
+                {hasFosterRole(roles) && (
+                  <Link
+                    to="/leads/ready-now"
+                    className="text-sm font-medium transition-colors hover:text-primary"
+                  >
+                    Ready Now Leads
+                  </Link>
+                )}
+                {hasAdminRole(roles) && (
+                  <Link
+                    to="/leads"
+                    className="text-sm font-medium transition-colors hover:text-primary"
+                  >
+                    All Leads
+                  </Link>
+                )}
               </nav>
               <Link 
                 to="/profile" 
