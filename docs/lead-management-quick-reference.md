@@ -185,7 +185,7 @@ Leads are fetched from `tc_everychildlead` entity (not Contact):
 
 ### Organization Filters
 - **Foster**: `_tc_fosterorganization_value eq '{orgId}'`
-- **Volunteer**: `tc_eclead_tc_ecleadsvolunteerorg_eclead/any(...)`
+- **Volunteer**: `tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi/any(...)`
 
 ### API Endpoints
 - `GET /api/v1/leads` - List with filters

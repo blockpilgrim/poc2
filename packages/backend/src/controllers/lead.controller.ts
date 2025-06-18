@@ -34,7 +34,9 @@ export class LeadController {
       
       // Parse query parameters
       const page = parseInt(req.query.page as string) || 1;
-      const limit = Math.min(parseInt(req.query.limit as string) || 25, 100);
+      // Accept both 'pageSize' (frontend) and 'limit' (legacy) for backward compatibility
+      const pageSize = req.query.pageSize || req.query.limit;
+      const limit = Math.min(parseInt(pageSize as string) || 25, 100);
       const offset = (page - 1) * limit;
       
       // Build filters - currently only search is supported
@@ -48,7 +50,7 @@ export class LeadController {
       const options: D365QueryOptions = {
         limit,
         offset,
-        orderBy: req.query.sortBy as string || 'modifiedon',
+        orderBy: req.query.sortBy as string || 'updatedAt', // Default matches frontend
         orderDirection: req.query.sortOrder === 'asc' ? 'asc' : 'desc'
       };
       
@@ -62,11 +64,11 @@ export class LeadController {
         data: result.value,
         pagination: {
           page,
-          limit,
-          total: result.totalCount || 0,
+          pageSize: limit, // Use pageSize to match frontend expectations
+          totalItems: result.totalCount || 0, // Use totalItems to match frontend
           totalPages,
           hasNext: page < totalPages,
-          hasPrev: page > 1
+          hasPrevious: page > 1 // Use hasPrevious to match frontend
         },
         filters: {
           initiative: req.d365Filter.initiative,
@@ -139,12 +141,11 @@ export class LeadController {
    * Only updates provided fields
    */
   async updateLead(_req: Request, res: Response): Promise<void> {
-    // TODO: Re-implement after Step 2 (shared types update) and Step 3 (frontend update)
-    // Step 1 focuses on read-only display of tc_everychildlead data
+    // TODO: Implement lead update functionality
     res.status(501).json({
-      error: 'Lead updates are temporarily disabled during system refactoring',
+      error: 'Lead updates are not yet implemented',
       code: 'NOT_IMPLEMENTED',
-      message: 'This feature will be re-enabled after the data model migration is complete'
+      message: 'This feature is coming soon'
     });
   }
   

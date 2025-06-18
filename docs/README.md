@@ -30,6 +30,7 @@
 - **[Backend Architecture](./backend-architecture.md)** - Core design principles and patterns
 - **[Backend API Reference](./backend-api-reference.md)** - Complete API endpoint documentation
 - **[D365 Integration Guide](./d365-integration-guide.md)** - Dynamics 365 data model and queries
+- **[D365 Naming Conventions](./d365-naming-conventions.md)** ⚡ - Field naming rules for D365 Web API
 - **[Initiative GUID Configuration](./initiative-guid-configuration.md)** - Configuration-driven initiative mapping
 - **[Backend Troubleshooting](./backend-troubleshooting.md)** - Common issues and debugging guide
 

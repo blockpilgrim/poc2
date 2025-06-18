@@ -5,14 +5,14 @@
  * used throughout the application for the tc_everychildlead entity.
  * 
  * IMPORTANT: Volunteer Organization Filter
- * The volunteer organization filter uses a many-to-many relationship query:
- * tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '{orgId}')
+ * The volunteer organization filter uses a 1:N relationship query to a junction entity:
+ * tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi/any(o:o/_tc_volunteerorganization_value eq '{orgId}')
  * 
  * This OData syntax means:
- * - tc_eclead_tc_ecleadsvolunteerorg_eclead: The many-to-many relationship table
+ * - tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi: The 1:N navigation property to the junction entity
  * - any(): OData function to check if any related record matches
- * - o: Alias for the related record in the subquery
- * - _tc_volunteerorganization_value: The volunteer org field in the relationship
+ * - o: Alias for the junction entity record in the subquery
+ * - _tc_volunteerorganization_value: The volunteer org lookup field in the junction entity
  */
 
 /**
@@ -50,11 +50,18 @@ export const ORGANIZATION_LEAD_TYPE = {
 } as const;
 
 /**
- * D365 Field Names
- * Centralized field names for consistency
+ * D365 Field Names and Navigation Properties
+ * 
+ * IMPORTANT: D365 Web API Naming Conventions
+ * - $select: Use lowercase field names (e.g., 'tc_name', '_tc_contact_value')
+ * - $expand: Use PascalCase navigation properties (e.g., 'tc_Contact', 'tc_LeadOwner')
+ * - $filter: Use field names with _value suffix for lookups
+ * 
+ * This structure clearly distinguishes between different contexts to ensure
+ * proper OData query construction.
  */
 export const D365_LEAD_FIELDS = {
-  // Base fields
+  // Base fields (for $select and $filter)
   ID: 'tc_everychildleadid',
   NAME: 'tc_name',
   STATUS: 'tc_ecleadlifecyclestatus',
@@ -64,15 +71,24 @@ export const D365_LEAD_FIELDS = {
   CREATED_ON: 'createdon',
   MODIFIED_ON: 'modifiedon',
   
-  // Lookup fields
-  CONTACT: 'tc_contact',
-  LEAD_OWNER: 'tc_leadowner',
+  // Lookup field values (for $select and $filter)
+  CONTACT_VALUE: '_tc_contact_value',
+  LEAD_OWNER_VALUE: '_tc_leadowner_value',
   INITIATIVE: '_tc_initiative_value',
   FOSTER_ORGANIZATION: '_tc_fosterorganization_value',
   
-  // Related entity fields
-  CONTACT_FULLNAME: 'fullname',
-  CONTACT_EMAIL: 'emailaddress1',
+  // Navigation properties (for $expand) - PascalCase
+  CONTACT_NAV: 'tc_Contact',         // Navigation to Contact entity
+  LEAD_OWNER_NAV: 'tc_LeadOwner',   // Navigation to Contact entity (owner)
+  
+  // Fields within expanded entities (lowercase)
+  CONTACT_FIELDS: {
+    FULLNAME: 'fullname',
+    EMAIL: 'emailaddress1',
+  },
+  
+  // 1:N Relationships (manually created N:N via junction entity)
+  VOLUNTEER_ORG_RELATIONSHIP: 'tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi', // Navigation property to volunteer org assignments
 } as const;
 
 /**
@@ -103,6 +119,53 @@ export function mapLeadType(engagementInterest: number | null | undefined): stri
     return LEAD_DEFAULTS.TYPE;
   }
   return ENGAGEMENT_INTEREST_MAP[engagementInterest] || LEAD_DEFAULTS.TYPE;
+}
+
+/**
+ * Field name mappings for sorting
+ * Maps frontend field names to D365 field names for $orderby clause
+ */
+export const SORT_FIELD_MAP: Record<string, string> = {
+  // Frontend field -> D365 field
+  'id': 'tc_everychildleadid',
+  'name': 'tc_name',
+  'status': 'tc_ecleadlifecyclestatus',
+  'type': 'tc_engagementinterest',
+  'leadScore': 'tc_leadscore2',
+  'createdAt': 'createdon',
+  'updatedAt': 'modifiedon',
+  // Fields that don't have direct D365 equivalents (these will be ignored for sorting)
+  'subjectName': 'tc_Contact/fullname', // Can't sort on expanded fields in OData
+  'subjectEmail': 'tc_Contact/emailaddress1', // Can't sort on expanded fields
+  'leadOwnerName': 'tc_LeadOwner/fullname', // Can't sort on expanded fields
+  'assignedOrganizationName': '_tc_fosterorganization_value', // Sort by org ID instead
+  'initiativeId': '_tc_initiative_value', // Sort by initiative GUID
+  // Also support D365 field names directly (pass through)
+  'tc_everychildleadid': 'tc_everychildleadid',
+  'tc_name': 'tc_name',
+  'tc_ecleadlifecyclestatus': 'tc_ecleadlifecyclestatus',
+  'tc_engagementinterest': 'tc_engagementinterest',
+  'tc_leadscore2': 'tc_leadscore2',
+  'createdon': 'createdon',
+  'modifiedon': 'modifiedon'
+};
+
+/**
+ * Helper function to map sort field from frontend to D365
+ * @param frontendField - The field name from the frontend
+ * @returns The corresponding D365 field name, or undefined if not sortable
+ */
+export function mapSortField(frontendField: string | undefined): string | undefined {
+  if (!frontendField) return undefined;
+  
+  const mappedField = SORT_FIELD_MAP[frontendField];
+  
+  // Filter out fields that can't be sorted in OData (expanded fields)
+  if (mappedField && mappedField.includes('/')) {
+    return undefined; // Can't sort on expanded fields
+  }
+  
+  return mappedField;
 }
 
 /**

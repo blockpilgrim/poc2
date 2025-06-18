@@ -21,7 +21,7 @@ The primary entity for lead management.
 - `tc_leadowner`: Internal user who owns the lead
 - `_tc_initiative_value`: Initiative assignment
 - `_tc_fosterorganization_value`: Foster organization assignment
-- `tc_eclead_tc_ecleadsvolunteerorg_eclead`: Volunteer organization assignments (many-to-many)
+- `tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi`: Volunteer organization assignments (1:N to junction entity)
 
 ### Contact
 Represents users and lead subjects.
@@ -86,15 +86,17 @@ $filter=_tc_initiative_value eq '{initiativeGuid}'
 $filter=_tc_fosterorganization_value eq '{organizationId}'
 ```
 
-**Volunteer Organizations (Many-to-Many):**
+**Volunteer Organizations (via Junction Entity):**
 ```
-$filter=tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '{organizationId}')
+$filter=tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi/any(o:o/_tc_volunteerorganization_value eq '{organizationId}')
 ```
 
 ### Expanding Related Entities
 ```
-$expand=tc_contact($select=fullname,emailaddress1),tc_leadowner($select=fullname)
+$expand=tc_Contact($select=fullname,emailaddress1),tc_LeadOwner($select=fullname)
 ```
+
+**Important**: Navigation properties for `$expand` must use PascalCase. See [D365 Naming Conventions](./d365-naming-conventions.md) for details.
 
 ### Field Selection
 ```
@@ -110,6 +112,15 @@ $top=50&$skip=100&$count=true
 ```
 $orderby=modifiedon desc
 ```
+
+**Field Name Mapping for Sorting:**
+The system automatically maps frontend field names to D365 field names:
+- `updatedAt` → `modifiedon`
+- `createdAt` → `createdon`
+- `name` → `tc_name`
+- `status` → `tc_ecleadlifecyclestatus`
+- `type` → `tc_engagementinterest`
+- `leadScore` → `tc_leadscore2`
 
 ## Authentication
 
@@ -176,14 +187,14 @@ headers: {
 
 ## Common Issues
 
-### 1. Many-to-Many Queries
-The volunteer organization filter syntax is complex:
+### 1. Junction Entity Queries
+The volunteer organization filter uses a 1:N relationship to a junction entity:
 ```
-tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '{id}')
+tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi/any(o:o/_tc_volunteerorganization_value eq '{id}')
 ```
-- `tc_eclead_tc_ecleadsvolunteerorg_eclead`: Relationship name
+- `tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi`: 1:N navigation property to junction entity
 - `any()`: OData function for collections
-- `o:`: Alias for the relationship record
+- `o:`: Alias for the junction entity record
 
 ### 2. Option Set Values
 Always map integers to strings:

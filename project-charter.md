@@ -200,6 +200,10 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
   - [x] PATCH /api/v1/leads/:id - Update lead with security checks (temporarily disabled for Step 1)
   - [x] GET /api/v1/leads/stats - Lead statistics endpoint
 - [x] Add pagination, filtering, and sorting
+- [x] **CRITICAL**: Fix D365 query navigation properties (tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi)
+- [x] **CRITICAL**: Implement field name mapping for sorting (frontend → D365)
+- [x] **Security**: Strict validation for organizationLeadType format
+- [x] **Security**: Fail-secure behavior for invalid organization data
 - [ ] Create batch operations endpoints
 - [ ] Implement comprehensive Zod validation
 - [x] **Security**: Input validation for all endpoints
@@ -216,6 +220,7 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
 - [x] Integrate with Zustand for hybrid state management (filterStore provides state, TanStack Query manages server state)
 - [x] Create initiative-aware query factory (all query keys include initiative)
 - [x] **CRITICAL**: Create TanStack Query hooks for API endpoints (complete with all CRUD operations)
+- [x] **CRITICAL**: Align frontend/backend parameter names (pageSize/limit, totalItems/total, hasPrevious/hasPrev)
 
 #### Essential UI Implementation
 - [x] Port page layouts from Next.js app (Lead pages implemented)
@@ -267,6 +272,10 @@ Roles will be assigned in Microsoft Entra ID and will be included as claims in t
   - [ ] Security tests for initiative boundary enforcement
 - [x] Unit tests for lead service with organization filtering
 - [x] Unit tests for initiative GUID configuration module
+- [x] Unit tests for D365 field name mapping (sorting)
+- [x] Unit tests for security validation (organizationLeadType)
+- [x] Unit tests for volunteer organization navigation property
+- [x] Unit tests for expanded field sorting behavior
 
 ### Post-MVP Stage - Advanced Features & Optimization
 
@@ -648,359 +657,51 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ## Current Focus Area
 
-**Lead Data Source Refactoring Complete - Ready for MVP Features**
+**Status** Have been focusing on critical D365 query issues that were preventing the `/leads` page from loading. The application seems to now be correctly querying D365, but there are other issues we're uncovering which may be preventing the `/leads` page from loading.
 
-**Latest Update (All 3 Steps Complete):** The foundational refactoring is complete. The application now correctly uses the `tc_everychildlead` entity with proper initiative GUID mapping. The frontend has been updated to handle the new data structure with graceful degradation for unavailable features.
 
-**Current State Summary:**
-- ✅ Backend queries correct D365 entity with organization filtering
-- ✅ Shared types aligned with tc_everychildlead structure  
-- ✅ Frontend updated to display new data model
-- ✅ Search, pagination, and sorting fully functional
-- 🚧 Status/Type filtering UI present but backend not implemented
-- 🚧 Create/Update/Delete operations return 501 Not Implemented
-- 📚 Comprehensive documentation added for onboarding
+### Files Changed in Most Recent Session
 
-### Immediate Next Steps
+**Backend Core Changes:**
+- `packages/backend/src/constants/d365-mappings.ts`
+  - Added `VOLUNTEER_ORG_RELATIONSHIP` constant with correct navigation property
+  - Created `SORT_FIELD_MAP` for frontend→D365 field mapping
+  - Added `mapSortField()` helper function
+  - Removed deprecated field mappings
 
-**Option 1: Enable Backend Filtering** (Recommended)
-- Implement status/type filtering in `lead.service.ts`
-- Update `lead.controller.ts` to accept and validate filter parameters
-- Remove `disabled` prop from frontend filter dropdowns
-- Test filtering works correctly with organization boundaries
+- `packages/backend/src/services/lead.service.ts`
+  - Updated volunteer org filter to use correct navigation property
+  - Integrated field mapping for sorting
+  - Enhanced security validation for organizationLeadType
+  - Removed legacy backward compatibility code
 
-**Option 2: Implement Create/Update Operations**
-- Design create lead flow (which D365 fields are required?)
-- Implement POST /api/v1/leads endpoint
-- Re-enable PATCH /api/v1/leads/:id endpoint
-- Build modal component for UI confirmations
-- Enable frontend buttons and forms
+- `packages/backend/src/controllers/lead.controller.ts`
+  - Fixed parameter naming (accepts both pageSize and limit)
+  - Updated response format to match frontend expectations
+  - Changed default sort field to 'updatedAt' (matches frontend)
 
-**Option 3: Complete MVP Features**
-- Review Feature Checklist "MVP Stage" section
-- Focus on security hardening (JWT RS256, session management)
-- Implement missing authentication features
-- Add comprehensive error handling
+**Test Updates:**
+- `packages/backend/src/services/__tests__/lead.service.test.ts`
+  - Updated tests for new navigation property
+  - Added sort field mapping tests
+  - Added security validation tests
+  - Added edge case coverage (19 tests total)
 
-### Critical Context for Next Session
+**Documentation Updates:**
+- `docs/d365-integration-guide.md` - Updated with correct navigation property and field mappings
+- `docs/lead-management-quick-reference.md` - Fixed volunteer organization filter example
 
-1. **Read These Docs First:**
-   - `docs/feature-status-reference.md` - Shows exactly what works vs what doesn't
-   - `docs/frontend-lead-refactoring.md` - Explains current UI limitations
-   - `packages/backend/BREAKING-CHANGES-STEP2.md` - API changes reference
+### Summary of Recent Fixes
 
-2. **Key Technical Decisions Made:**
-   - Frontend maintains all UI elements but disables non-functional ones
-   - Filter store tracks all filters even though only search works (for easy future activation)
-   - No modal component exists - modal-dependent hooks are commented out
-   - Backend returns 501 for unimplemented endpoints rather than removing them
+The application was experiencing D365 Web API errors that prevented the leads page from loading. We fixed three critical issues:
 
-3. **Architecture Patterns Established:**
-   - Graceful degradation: Show everything, disable what doesn't work
-   - Clear user feedback: Tooltips explain why features are disabled
-   - Future-ready: Infrastructure in place for easy feature activation
-   - Fail-secure: Invalid data returns empty results, not errors
+1. **Navigation Property Error**: The volunteer organization relationship was using an incorrect property name. We discovered the correct name by examining D365 metadata and updated it throughout the codebase.
 
-4. **Known Limitations to Address:**
-   - Phone numbers and addresses no longer available (tc_everychildlead doesn't have them)
-   - Lead assignment changes not possible (no update endpoint)
-   - No way to add notes or tags to leads
-   - `leadScore` field available but not displayed anywhere
+2. **Sort Field Error**: D365 was rejecting sort requests because it doesn't recognize frontend field names like 'updatedAt'. We implemented a comprehensive field mapping system that translates frontend names to D365 names.
 
-5. **Testing Checklist:**
-   - ✅ Search functionality works
-   - ✅ Pagination works
-   - ✅ Sorting works
-   - ✅ Organization filtering automatic
-   - ❌ Status/Type filters need backend
-   - ❌ Create/Update need implementation
+3. **Parameter Mismatches**: The frontend and backend were using different parameter names for pagination, causing features to silently fail. We aligned these across the stack.
 
-**Original Background & Problem Statement:**
+All fixes follow the principle of fail-secure behavior - invalid data or configuration results in empty results rather than exposing errors or data. The codebase is now more maintainable with centralized constants, comprehensive tests, and clear documentation of D365 quirks.
 
-The initial implementation for the Lead Management UI was built on the incorrect assumption that a D365 `Contact` record represents a lead. Our actual business process uses the **`tc_everychildlead`** entity. Additionally, during Step 1 implementation, we discovered that the `_tc_initiative_value` field in D365 expects Initiative entity GUIDs (e.g., `b6ced3de-2993-ed11-aad1-6045bd006a3a` for EC Oregon), not the application's string identifiers (e.g., `ec-oregon`).
-
-### Executive Summary of the Refined Strategy
-
-The core of this plan is to modify the backend's `lead.service.ts` to become a robust data aggregation and transformation layer. It will not just fetch `tc_everychildlead` records; it will construct a complete, UI-friendly `Lead` object by:
-
-1.  **Querying `tc_everychildlead`** as the base entity.
-2.  **Expanding to the related `Contact`** (`tc_contact`) to retrieve the lead subject's name and contact information, preserving the integrity of the existing UI components.
-3.  **Expanding to the owning `Contact`** (`tc_leadowner`) to display the internal owner of the lead.
-4.  **Implementing precise assignment logic** based on the user's organization type (`tc_organizationleadtype`).
-5.  **Transforming D365 option set integers** into the meaningful string literals required by the frontend.
-
-This approach ensures the frontend receives a clean, consistent data structure, minimizing its complexity and adhering to our architectural principle of a smart backend and a leaner frontend.
-
-**Status:** Step 1 Backend Refactoring ✅ COMPLETE | Initiative GUID Mapping ✅ COMPLETE | Step 2 Shared Types ✅ COMPLETE | Step 3 Frontend ✅ COMPLETE
-
----
-
-### Implementation Plan
-
-#### Step 1 Completion Summary (Backend Refactoring) ✅
-
-**What Was Completed:**
-1. **Lead Service Refactored** (`lead.service.ts`)
-   - Now queries `/tc_everychildleads` instead of `/contacts`
-   - Implements fail-secure organization checking (returns empty if org missing)
-   - Organization-based filtering works for Foster, Volunteer, and dual-type orgs
-   - Expands `tc_contact` and `tc_leadowner` for complete data
-   - Maps D365 integers to meaningful strings
-
-2. **D365 Mappings Created** (`constants/d365-mappings.ts`)
-   - Centralized status and type mappings
-   - Helper functions for safe transformations
-   - Organization type constants and validation
-
-3. **Security Enhancements**
-   - `organizationLeadType` added to D365Filter and JWT
-   - Middleware updated to inject organization context
-   - Validation for organizationLeadType format
-   - Fallback to Foster filter for backward compatibility
-
-4. **Testing & Documentation**
-   - Unit tests for lead service (10 tests passing)
-   - Comprehensive backend documentation added to `/docs`
-   - Lead Management Quick Reference updated with backend section
-
-**Key Implementation Details for Next Steps:**
-- Backend maintains existing `Lead` interface temporarily (with type casting)
-- `mapD365ToLead` splits fullname into first/last for compatibility
-- Update operations disabled (501 status) until migration complete
-- Organization filters: Foster uses direct lookup, Volunteer uses many-to-many
-
-**Initiative GUID Mapping Implementation (NEW):**
-1. **Configuration-Driven Approach** (`config/initiatives.config.ts`)
-   - Maps application initiative IDs to D365 GUIDs
-   - Supports environment variable configuration: `INITIATIVES_CONFIG_JSON`
-   - Validates configuration on startup with placeholder detection
-   - Enables 50+ state scalability without code changes
-
-2. **Performance Optimizations**
-   - Cached reverse lookup map for O(1) GUID-to-initiative conversion
-   - Case-insensitive GUID handling for D365 compatibility
-
-3. **Error Handling**
-   - Fail-secure approach: invalid mappings return empty results
-   - Comprehensive logging for debugging
-   - Try-catch blocks prevent crashes from configuration errors
-
-4. **Backward Compatibility**
-   - Frontend continues using string IDs (ec-oregon, etc.)
-   - JWT tokens unchanged
-   - API contracts preserved
-   - Mapping happens only at D365 query layer
-
-**CRITICAL for Production Deployment:**
-1. **Replace Placeholder GUIDs** in `initiatives.config.ts`:
-   ```typescript
-   'ec-kentucky': {
-     d365Guid: '00000000-0000-0000-0000-000000000001', // TODO: Replace with actual GUID
-     displayName: 'Kentucky',
-     enabled: true
-   },
-   // Same for Arkansas, Tennessee, Oklahoma
-   ```
-
-2. **Configure Production Environment**:
-   ```bash
-   export INITIATIVES_CONFIG_JSON='{
-     "initiatives": {
-       "ec-oregon": {
-         "d365Guid": "b6ced3de-2993-ed11-aad1-6045bd006a3a",
-         "displayName": "Oregon",
-         "enabled": true
-       },
-       // ... other states with actual GUIDs
-     }
-   }'
-   ```
-
-3. **How to Get D365 Initiative GUIDs**:
-   Query D365 to find Initiative entity records:
-   ```
-   GET /api/data/v9.2/tc_initiatives?$filter=tc_name eq 'EC Kentucky'
-   ```
-
----
-
-#### Step 2 Completion Summary (Shared Types Update) ✅
-
-**What Was Completed:**
-1. **Lead Interface Updated** (`packages/shared/src/types/lead.ts`)
-   - Removed Contact-based fields (firstName, lastName, address, phoneNumber, etc.)
-   - Added tc_everychildlead fields: `name`, `subjectName`, `subjectEmail`, `leadOwnerName`, `leadScore`
-   - Aligned with D365 entity structure for clarity and correctness
-
-2. **Type Enums Updated**
-   - `LeadStatus`: 'assigned' | 'in-progress' | 'certified' | 'on-hold' | 'closed' | 'other'
-   - `LeadType`: 'foster' | 'volunteer' | 'other'
-   - Now matches D365 option set mappings exactly
-
-3. **LeadFilters Simplified**
-   - Removed unimplemented filters (status, type, priority, tags, etc.)
-   - Only `search` remains (inherited from FilterParams)
-   - Documented that most filtering happens server-side via JWT claims
-
-4. **Backend Cleanup**
-   - Removed type-casting workarounds (`as any`) in `mapD365ToLead`
-   - Updated lead controller to remove obsolete filter handling
-   - Added deprecation notice to obsolete D365Lead interface
-   - All backend tests passing with new types
-
-5. **Documentation Created**
-   - `BREAKING-CHANGES-STEP2.md` - Comprehensive list of API changes
-   - `docs/shared-types-architecture.md` - Type system design principles
-   - `docs/shared-types-quick-reference.md` - Daily reference guide
-   - Updated docs index to include shared types as foundational reading
-
-**Key Breaking Changes:**
-- **CRITICAL**: Frontend will NOT build until Step 3 is complete
-- API response structure completely changed (see BREAKING-CHANGES-STEP2.md)
-- Many Lead properties removed or renamed
-- Status/Type enum values completely different
-- No backward compatibility maintained
-
-#### **Step 3: Frontend (`packages/frontend`) - Adapting the UI and State** ✅
-
-**Critical Context for Implementation:**
-The frontend currently expects the old Lead interface structure and will NOT compile. The build errors in `npm run build:frontend` provide a complete list of all locations that need updating. Key files with errors:
-- `src/components/data/LeadTable/columns.tsx` - Table columns reference old fields
-- `src/components/leads/LeadCard.tsx` - Mobile card uses old fields
-- `src/components/leads/LeadStatusBadge.tsx` - Has old status values
-- `src/components/leads/LeadTypeBadge.tsx` - Has old type values
-- `src/pages/leads/[id].tsx` - Detail page uses many old fields
-- `src/hooks/queries/leads/useLeads.ts` - Passes obsolete filters
-
-**A. Update Components to Use New Lead Properties**
-1. **Table Columns** (`LeadTable/columns.tsx`):
-   - Replace `email` → `subjectEmail`
-   - Replace `phoneNumber` → Remove (not available)
-   - Replace `displayName` → `name` or `subjectName` depending on context
-
-2. **Lead Cards** (`LeadCard.tsx`):
-   - Replace `displayName` → `name` (for lead title)
-   - Replace `email` → `subjectEmail`
-   - Remove `phoneNumber` and `priority` fields
-
-3. **Lead Detail Page** (`pages/leads/[id].tsx`):
-   - Replace `firstName`/`lastName` → `subjectName`
-   - Replace `email` → `subjectEmail`
-   - Replace `assignedToName` → `leadOwnerName`
-   - Remove address, phoneNumber, source, notes, tags sections
-   - Remove lastContactedAt, assignedAt fields
-
-**B. Update Status/Type Badges**
-1. **LeadStatusBadge** - Update status mappings:
-   - Remove: 'new', 'contacted', 'qualified', etc.
-   - Add: 'assigned', 'in-progress', 'certified', 'on-hold', 'closed', 'other'
-
-2. **LeadTypeBadge** - Update type mappings:
-   - Remove all except: 'foster', 'volunteer', 'other'
-
-**C. Simplify Filtering**
-1. **Remove Filter UI Elements**:
-   - Status filter dropdown
-   - Type filter dropdown
-   - Priority filter
-   - Any other obsolete filters
-
-2. **Update Filter Store**:
-   - Remove obsolete filter state and actions
-   - Keep only search functionality
-
-**D. Consider UX Implications**
-1. **Lost Information**:
-   - Phone numbers are no longer available
-   - Addresses are no longer available
-   - Decide if these need alternative solutions
-
-2. **New Information**:
-   - `leadScore` is now available - consider displaying
-   - `leadOwnerName` replaces assignedToName
-
-**Testing Strategy:**
-1. Start with `npm run build:frontend` to see all type errors
-2. Fix components one at a time
-3. Run `npm run dev` to test UI functionality
-4. Verify search still works
-5. Test with different lead statuses/types
-
-#### Step 3 Completion Summary ✅
-
-**What Was Completed:**
-1. **Property Mapping Updates**
-   - All components updated to use new Lead properties
-   - `displayName` → `subjectName`, `email` → `subjectEmail`, etc.
-   - Removed references to obsolete properties (phoneNumber, priority, tags, etc.)
-
-2. **Component Updates**
-   - Lead table columns aligned with new structure
-   - Lead cards and detail page updated
-   - Status/Type badges updated with new enum values
-   - LeadPriorityIndicator component removed entirely
-
-3. **Filter Handling**
-   - Status/Type filters disabled with "coming soon" tooltips
-   - Filter store preserves state for future backend support
-   - Only search filter is functional (backend limitation)
-   - URL parameter parsing updated but maintains backward compatibility
-
-4. **Non-functional Features**
-   - Create/Edit lead buttons disabled with explanatory tooltips
-   - Modal-dependent hooks commented out (no modal component exists)
-   - Clear visual indicators for unavailable features
-
-5. **Code Quality Improvements**
-   - Fixed type error in useCreateLead hook
-   - Updated shared lead schemas to match new structure
-   - Added comprehensive documentation
-   - All TypeScript errors resolved, builds successfully
-
-**Key Architectural Decisions:**
-- **Graceful Degradation**: UI shows all features but disables non-functional ones
-- **Future-Ready**: Filter infrastructure maintained for easy activation
-- **User Feedback**: Clear tooltips explain why features are disabled
-- **No Breaking Changes**: Component interfaces preserved for future updates
-
-**Documentation Created:**
-- `docs/frontend-lead-refactoring.md` - Explains changes and current state
-- `docs/feature-status-reference.md` - Quick reference for what works vs what doesn't
-
----
-
-### Critical Information for Next Steps
-
-1. **Backend API Changes:**
-   - Lead endpoints now return data from `tc_everychildlead`
-   - Organization filtering is automatic based on JWT claims
-   - Update operations return 501 until migration complete
-   - **NEW**: D365 queries now use Initiative GUIDs via configuration mapping
-
-2. **Security Context Required:**
-   - All lead queries require `organizationId` in JWT
-   - Missing org context = empty results (fail-secure)
-   - Organization type determines filter logic
-   - **NEW**: Invalid initiative GUID mapping = fail-secure with empty results
-
-3. **Testing Considerations:**
-   - Test with Foster-only users
-   - Test with Volunteer-only users
-   - Test with dual Foster/Volunteer users
-   - Verify no cross-org data leakage
-   - **NEW**: Verify initiative GUID mapping works with real D365 data
-
-4. **Immediate TODO Before Production:**
-   - Obtain actual D365 Initiative GUIDs for Kentucky, Arkansas, Tennessee, Oklahoma
-   - Update `initiatives.config.ts` with real GUIDs
-   - Test queries return correct data for each initiative
-
-5. **Step 3 Preparation Notes:**
-   - **IMPORTANT**: Frontend will NOT build until Step 3 is complete
-   - Review `BREAKING-CHANGES-STEP2.md` for complete list of API changes
-   - Use `npm run build:frontend` errors as a checklist of files to update
-   - Consider UX implications of lost fields (phone, address)
-   - Opportunity to improve UI with new fields (leadScore, clearer naming)
-   - All filtering except search must be removed from UI
 
 *This charter represents a strategic exploration of decoupled architecture with multi-state initiative support. The initiative-based security model is non-negotiable and must be implemented from day one.*

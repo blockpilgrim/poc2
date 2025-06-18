@@ -79,7 +79,7 @@ describe('LeadService', () => {
       expect(url).toContain('statecode eq 0');
       expect(url).toContain(`_tc_initiative_value eq '${TEST_INITIATIVE_GUID}'`);
       expect(url).toContain(`_tc_fosterorganization_value eq '${TEST_ORG_GUID}'`);
-      expect(url).not.toContain('tc_eclead_tc_ecleadsvolunteerorg_eclead');
+      expect(url).not.toContain('tc_eclead_tc_ecleadsvolunteerorg');
     });
 
     it('should build correct filter for volunteer organization', async () => {
@@ -100,7 +100,7 @@ describe('LeadService', () => {
       await leadService.getLeads(filter);
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain(`tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '${TEST_ORG_GUID}')`);
+      expect(url).toContain(`tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi/any(o:o/_tc_volunteerorganization_value eq '${TEST_ORG_GUID}')`);
       // Note: _tc_fosterorganization_value appears in $select but not in $filter for volunteer-only orgs
       expect(url).toContain('$filter=');
       const filterPart = url.split('$filter=')[1].split('&')[0];
@@ -126,7 +126,7 @@ describe('LeadService', () => {
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
       // Should have OR condition with both filters
-      expect(url).toMatch(/\(.*_tc_fosterorganization_value.*or.*tc_eclead_tc_ecleadsvolunteerorg_eclead.*\)/);
+      expect(url).toMatch(/\(.*_tc_fosterorganization_value.*or.*tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi.*\)/);
     });
 
     it('should include expand clause for related entities', async () => {
@@ -147,7 +147,7 @@ describe('LeadService', () => {
       await leadService.getLeads(filter);
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('$expand=tc_contact($select=fullname,emailaddress1),tc_leadowner($select=fullname)');
+      expect(url).toContain('$expand=tc_Contact($select=fullname,emailaddress1),tc_LeadOwner($select=fullname)');
     });
 
     it('should map tc_everychildlead to Lead interface correctly', async () => {
@@ -168,11 +168,11 @@ describe('LeadService', () => {
         _tc_initiative_value: TEST_INITIATIVE_GUID, // Using D365 GUID
         createdon: '2024-01-01T00:00:00Z',
         modifiedon: '2024-01-02T00:00:00Z',
-        tc_contact: {
+        tc_Contact: {
           fullname: 'John Doe',
           emailaddress1: 'john@example.com'
         },
-        tc_leadowner: {
+        tc_LeadOwner: {
           fullname: 'Jane Smith'
         }
       };
@@ -388,6 +388,160 @@ describe('LeadService', () => {
       const result = await leadService.getLeadById(filter, 'lead-123');
 
       expect(result).toBeNull(); // Fail secure - deny access
+    });
+  });
+
+  describe('sorting field mapping', () => {
+    it('should map updatedAt to modifiedon in orderBy clause', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID,
+        organizationLeadType: '948010000'
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ value: [], '@odata.count': 0 })
+      } as Response);
+
+      await leadService.getLeads(filter, {}, { orderBy: 'updatedAt', orderDirection: 'desc' });
+
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).toContain('$orderby=modifiedon desc');
+      expect(url).not.toContain('updatedAt');
+    });
+
+    it('should map createdAt to createdon in orderBy clause', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID,
+        organizationLeadType: '948010000'
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ value: [], '@odata.count': 0 })
+      } as Response);
+
+      await leadService.getLeads(filter, {}, { orderBy: 'createdAt', orderDirection: 'asc' });
+
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).toContain('$orderby=createdon asc');
+    });
+
+    it('should handle unknown sort fields with default fallback', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID,
+        organizationLeadType: '948010000'
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ value: [], '@odata.count': 0 })
+      } as Response);
+
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await leadService.getLeads(filter, {}, { orderBy: 'unknownField' });
+
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Unknown sort field, using default:', 'unknownField');
+      
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).toContain('$orderby=modifiedon desc');
+      
+      consoleSpy.mockRestore();
+    });
+
+    it('should ignore expanded fields for sorting', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID,
+        organizationLeadType: '948010000'
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ value: [], '@odata.count': 0 })
+      } as Response);
+
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Try to sort by an expanded field (which isn't supported by OData)
+      await leadService.getLeads(filter, {}, { orderBy: 'subjectName' });
+
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Unknown sort field, using default:', 'subjectName');
+      
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).toContain('$orderby=modifiedon desc');
+      expect(url).not.toContain('tc_Contact/fullname');
+      
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('security validation', () => {
+    it('should return empty results when organizationLeadType is missing', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID
+        // organizationLeadType is missing
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await leadService.getLeads(filter);
+
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Missing organizationLeadType in JWT:', {
+        organizationId: TEST_ORG_GUID,
+        userId: 'test-user'
+      });
+      expect(result).toEqual({ value: [], totalCount: 0 });
+      expect(fetch).not.toHaveBeenCalled(); // Should not make D365 call
+      
+      consoleSpy.mockRestore();
+    });
+
+    it('should return empty results for invalid organizationLeadType format', async () => {
+      const filter: D365Filter = {
+        initiative: 'test-initiative',
+        userId: 'test-user',
+        organizationId: TEST_ORG_GUID,
+        organizationLeadType: 'invalid,format,abc' // Invalid format
+      };
+
+      vi.mocked(initiativeMappingService.getD365InitiativeGuid).mockReturnValue(TEST_INITIATIVE_GUID);
+      vi.mocked(d365Service.getAccessToken).mockResolvedValue('test-token');
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await leadService.getLeads(filter);
+
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Invalid organizationLeadType format:', {
+        organizationLeadType: 'invalid,format,abc',
+        organizationId: TEST_ORG_GUID,
+        userId: 'test-user'
+      });
+      expect(result).toEqual({ value: [], totalCount: 0 });
+      expect(fetch).not.toHaveBeenCalled(); // Should not make D365 call
+      
+      consoleSpy.mockRestore();
     });
   });
 });

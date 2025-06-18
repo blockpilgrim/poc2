@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import type { PaginatedResponse, Lead } from '@partner-portal/shared';
 import { api } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -51,17 +52,21 @@ export const useLeads = (options?: UseLeadsOptions) => {
         },
       });
       
-      // Update pagination state with server response
-      setLeadPagination({
-        totalItems: response.data.pagination.totalItems,
-        totalPages: response.data.pagination.totalPages,
-      });
-      
       return response.data;
     },
     ...standardDataOptions,
     enabled: !!initiative && (options?.enabled ?? true),
   });
+
+  // Update pagination state after successful query
+  useEffect(() => {
+    if (query.data) {
+      setLeadPagination({
+        totalItems: query.data.pagination.totalItems,
+        totalPages: query.data.pagination.totalPages,
+      });
+    }
+  }, [query.data, setLeadPagination]);
 
   // Handle errors in the UI layer
   if (query.error && query.fetchStatus === 'idle') {

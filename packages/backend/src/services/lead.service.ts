@@ -13,7 +13,8 @@ import {
   ORGANIZATION_LEAD_TYPE,
   hasOrganizationType,
   mapLeadStatus,
-  mapLeadType
+  mapLeadType,
+  mapSortField
 } from '../constants/d365-mappings';
 
 // Type for tc_everychildlead response
@@ -28,12 +29,14 @@ interface D365EveryChildLead {
   modifiedon: string;
   _tc_initiative_value?: string;
   _tc_fosterorganization_value?: string;
-  // Expanded entities
-  tc_contact?: {
+  _tc_contact_value?: string;
+  _tc_leadowner_value?: string;
+  // Expanded entities (PascalCase navigation properties in D365 response)
+  tc_Contact?: {
     fullname?: string;
     emailaddress1?: string;
   };
-  tc_leadowner?: {
+  tc_LeadOwner?: {
     fullname?: string;
   };
 }
@@ -91,25 +94,32 @@ export class LeadService {
         // Validate format: should be comma-separated numbers
         const validPattern = /^\d+(,\d+)*$/;
         if (!validPattern.test(initiativeFilter.organizationLeadType)) {
-          console.warn('[LeadService] Invalid organizationLeadType format:', {
+          console.error('[LeadService] Invalid organizationLeadType format:', {
             organizationLeadType: initiativeFilter.organizationLeadType,
-            organizationId: initiativeFilter.organizationId
+            organizationId: initiativeFilter.organizationId,
+            userId: initiativeFilter.userId
           });
-        } else {
-          // Foster organization filter
-          if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.FOSTER)) {
-            orgFilters.push(`_tc_fosterorganization_value eq '${initiativeFilter.organizationId}'`);
-          }
-          
-          // Volunteer organization filter (many-to-many relationship)
-          if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.VOLUNTEER)) {
-            orgFilters.push(`tc_eclead_tc_ecleadsvolunteerorg_eclead/any(o:o/_tc_volunteerorganization_value eq '${initiativeFilter.organizationId}')`);
-          }
+          // Security: Return empty results for invalid data
+          throw new AppError('Invalid organization configuration', 400);
+        }
+        
+        // Foster organization filter
+        if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.FOSTER)) {
+          orgFilters.push(`_tc_fosterorganization_value eq '${initiativeFilter.organizationId}'`);
+        }
+        
+        // Volunteer organization filter (1:N relationship to junction entity)
+        if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.VOLUNTEER)) {
+          orgFilters.push(`${D365_LEAD_FIELDS.VOLUNTEER_ORG_RELATIONSHIP}/any(o:o/_tc_volunteerorganization_value eq '${initiativeFilter.organizationId}')`);
         }
       } else {
-        // If no organizationLeadType, default to foster organization filter for backward compatibility
-        console.warn('[LeadService] No organizationLeadType provided, defaulting to foster filter');
-        orgFilters.push(`_tc_fosterorganization_value eq '${initiativeFilter.organizationId}'`);
+        // Security: No organizationLeadType means the user's JWT is incomplete
+        console.error('[LeadService] Missing organizationLeadType in JWT:', {
+          organizationId: initiativeFilter.organizationId,
+          userId: initiativeFilter.userId
+        });
+        // Throw error to be handled by getLeads
+        throw new AppError('Missing organization type configuration', 400);
       }
       
       if (orgFilters.length > 0) {
@@ -153,12 +163,27 @@ export class LeadService {
       D365_LEAD_FIELDS.CREATED_ON,
       D365_LEAD_FIELDS.MODIFIED_ON,
       D365_LEAD_FIELDS.INITIATIVE,
-      D365_LEAD_FIELDS.FOSTER_ORGANIZATION
+      D365_LEAD_FIELDS.FOSTER_ORGANIZATION,
+      D365_LEAD_FIELDS.CONTACT_VALUE,
+      D365_LEAD_FIELDS.LEAD_OWNER_VALUE
     ];
     params.push(`$select=${selectFields.join(',')}`);
     
-    // Expand related entities
-    params.push(`$expand=${D365_LEAD_FIELDS.CONTACT}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME},${D365_LEAD_FIELDS.CONTACT_EMAIL}),${D365_LEAD_FIELDS.LEAD_OWNER}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME})`);
+    // Expand related entities using PascalCase navigation properties
+    // D365 Web API requires PascalCase for navigation properties in $expand
+    const expandParts: string[] = [];
+    
+    // Expand contact with selected fields
+    expandParts.push(
+      `${D365_LEAD_FIELDS.CONTACT_NAV}($select=${D365_LEAD_FIELDS.CONTACT_FIELDS.FULLNAME},${D365_LEAD_FIELDS.CONTACT_FIELDS.EMAIL})`
+    );
+    
+    // Expand lead owner with selected fields
+    expandParts.push(
+      `${D365_LEAD_FIELDS.LEAD_OWNER_NAV}($select=${D365_LEAD_FIELDS.CONTACT_FIELDS.FULLNAME})`
+    );
+    
+    params.push(`$expand=${expandParts.join(',')}`);
     
     // Pagination
     if (options.limit) {
@@ -170,8 +195,17 @@ export class LeadService {
     
     // Sorting
     if (options.orderBy) {
-      const direction = options.orderDirection === 'desc' ? ' desc' : '';
-      params.push(`$orderby=${options.orderBy}${direction}`);
+      // Map frontend field names to D365 field names
+      const d365Field = mapSortField(options.orderBy);
+      if (d365Field) {
+        // Always include direction (asc or desc)
+        const direction = options.orderDirection === 'asc' ? ' asc' : ' desc';
+        params.push(`$orderby=${d365Field}${direction}`);
+      } else {
+        // If no mapping found, default to modified date
+        console.warn('[LeadService] Unknown sort field, using default:', options.orderBy);
+        params.push('$orderby=modifiedon desc');
+      }
     } else {
       // Default sort by modified date
       params.push('$orderby=modifiedon desc');
@@ -206,12 +240,13 @@ export class LeadService {
       id: d365Lead.tc_everychildleadid,
       name: d365Lead.tc_name || '',
       
-      // Subject information from expanded tc_contact
-      subjectName: d365Lead.tc_contact?.fullname,
-      subjectEmail: d365Lead.tc_contact?.emailaddress1,
+      // Subject information from expanded tc_Contact navigation property
+      // Note: Navigation properties use PascalCase in D365 responses
+      subjectName: d365Lead.tc_Contact?.fullname,
+      subjectEmail: d365Lead.tc_Contact?.emailaddress1,
       
-      // Lead owner from expanded tc_leadowner
-      leadOwnerName: d365Lead.tc_leadowner?.fullname,
+      // Lead owner from expanded tc_LeadOwner navigation property
+      leadOwnerName: d365Lead.tc_LeadOwner?.fullname,
       
       // Lead Details
       status: mapLeadStatus(d365Lead.tc_ecleadlifecyclestatus) as LeadStatus,
@@ -259,7 +294,17 @@ export class LeadService {
       }
       
       // Build secure filter
-      const oDataFilter = this.buildSecureODataFilter(initiativeFilter, filters);
+      let oDataFilter: string;
+      try {
+        oDataFilter = this.buildSecureODataFilter(initiativeFilter, filters);
+      } catch (error) {
+        // Handle security validation errors
+        if (error instanceof AppError && error.statusCode === 400) {
+          // Return empty results for invalid configuration
+          return { value: [], totalCount: 0 };
+        }
+        throw error;
+      }
       const queryParams = this.buildODataQuery(options);
       
       // Log query for audit (without token)
@@ -273,6 +318,9 @@ export class LeadService {
       
       // Query D365 - CHANGED: Now querying tc_everychildleads
       const url = `${process.env.D365_URL}/api/data/v9.2/tc_everychildleads?$filter=${oDataFilter}&${queryParams}`;
+      
+      // Log the full query for debugging (without sensitive token)
+      console.log('[LeadService] D365 Query URL:', url.replace(process.env.D365_URL!, '[D365_URL]'));
       
       const response = await fetch(url, {
         method: 'GET',
@@ -356,10 +404,20 @@ export class LeadService {
         D365_LEAD_FIELDS.CREATED_ON,
         D365_LEAD_FIELDS.MODIFIED_ON,
         D365_LEAD_FIELDS.INITIATIVE,
-        D365_LEAD_FIELDS.FOSTER_ORGANIZATION
+        D365_LEAD_FIELDS.FOSTER_ORGANIZATION,
+        D365_LEAD_FIELDS.CONTACT_VALUE,
+        D365_LEAD_FIELDS.LEAD_OWNER_VALUE
       ];
       
-      const expandClause = `$expand=${D365_LEAD_FIELDS.CONTACT}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME},${D365_LEAD_FIELDS.CONTACT_EMAIL}),${D365_LEAD_FIELDS.LEAD_OWNER}($select=${D365_LEAD_FIELDS.CONTACT_FULLNAME})`;
+      // Expand related entities using PascalCase navigation properties
+      const expandParts: string[] = [];
+      expandParts.push(
+        `${D365_LEAD_FIELDS.CONTACT_NAV}($select=${D365_LEAD_FIELDS.CONTACT_FIELDS.FULLNAME},${D365_LEAD_FIELDS.CONTACT_FIELDS.EMAIL})`
+      );
+      expandParts.push(
+        `${D365_LEAD_FIELDS.LEAD_OWNER_NAV}($select=${D365_LEAD_FIELDS.CONTACT_FIELDS.FULLNAME})`
+      );
+      const expandClause = `$expand=${expandParts.join(',')}`;
       
       const url = `${process.env.D365_URL}/api/data/v9.2/tc_everychildleads(${leadId})?$select=${selectFields.join(',')}&${expandClause}`;
       
