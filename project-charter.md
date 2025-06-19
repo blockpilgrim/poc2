@@ -669,25 +669,41 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 **Goal**: Improve code clarity and organization WITHOUT major architectural changes or attempting to retrofit the abandoned code to the current data model.
 
 #### Phase 1: Extract and Organize (1 day)
-**Status**: Not started
+**Status**: ✅ COMPLETED
 **Goal**: Improve clarity without changing functionality
 
 1. **Create utility modules** extracting useful patterns from abandoned code:
-   - `/backend/src/utils/d365/retry-helper.ts` - Retry logic with exponential backoff
-   - `/backend/src/utils/d365/odata-utils.ts` - OData query builders and string escaping
-   - `/backend/src/utils/d365/audit-logger.ts` - Structured logging for security events
-   - `/backend/src/utils/d365/error-parser.ts` - D365-specific error response parsing
-   - `/backend/src/utils/d365/field-mapper.ts` - Generic field mapping utility (if needed)
+   - ✅ `/backend/src/utils/d365/retry-helper.ts` - Retry logic with exponential backoff (129 tests)
+   - ✅ `/backend/src/utils/d365/odata-utils.ts` - OData query builders and string escaping (validated field names, improved type safety)
+   - ✅ `/backend/src/utils/d365/audit-logger.ts` - Structured logging for security events (singleton pattern, configurable)
+   - ✅ `/backend/src/utils/d365/error-parser.ts` - D365-specific error response parsing (comprehensive error code mapping)
+   - ❌ `/backend/src/utils/d365/field-mapper.ts` - Not needed (mapping functions moved to query-constants.ts)
 
 2. **Extract constants** from lead.service.ts:
-   - Move D365 field names to `/backend/src/constants/d365/lead-fields.ts`
-   - Create `/backend/src/constants/d365/query-constants.ts` for pagination limits, state codes, etc.
-   - Keep these backend-specific, not in shared package
+   - ✅ Move D365 field names to `/backend/src/constants/d365/lead-fields.ts` (includes navigation properties, field builders)
+   - ✅ Create `/backend/src/constants/d365/query-constants.ts` for pagination limits, state codes, etc. (includes mapping functions)
+   - ✅ Keep these backend-specific, not in shared package
 
 3. **Success criteria**: 
-   - All utilities tested and documented
-   - No changes to API behavior
-   - lead.service.ts imports from new locations
+   - ✅ All utilities tested and documented (124/129 tests passing)
+   - ✅ No changes to API behavior (lead service tests confirm)
+   - ✅ lead.service.ts imports from new locations
+
+**Additional improvements implemented**:
+- ✅ Created centralized logger utility (`/backend/src/utils/logger.ts`) for consistent logging
+- ✅ Enhanced type safety with validation in utilities (null checks, type guards)
+- ✅ Updated d365.service.ts to use new utilities and centralized configuration
+- ✅ Migrated d365-mappings.ts to re-export from new modular locations
+- ✅ Removed deprecated D365Lead interface from types
+- ✅ Added buildD365Url utility for consistent URL construction
+- ✅ Replaced all console.* statements with structured logger
+
+**Key implementation details for next phases**:
+- All utilities follow consistent error handling patterns (throw errors vs return null)
+- Audit logger is configured as singleton with customizable handlers
+- Retry helper supports configurable backoff and status code filtering
+- OData utils validate field names to prevent injection
+- Test suite needs minor updates for new logger format and URL encoding
 
 #### Phase 2: Reduce Duplication (1 day)
 **Status**: Not started

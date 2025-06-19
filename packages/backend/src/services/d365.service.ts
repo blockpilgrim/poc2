@@ -1,6 +1,9 @@
 import { config } from '../config';
 import type { User, Initiative, OrganizationData } from '@partner-portal/shared';
 import { authService } from './auth.service';
+import { D365_API_CONFIG, D365_HEADERS } from '../constants/d365/query-constants';
+import { buildD365Url, buildFilterExpression, escapeODataString } from '../utils/d365/odata-utils';
+import { createLogger } from '../utils/logger';
 
 /**
  * D365 Service for fetching organization and business data
@@ -23,13 +26,11 @@ import { authService } from './auth.service';
  * 5. Handle failures gracefully - org data is optional
  */
 export class D365Service {
-  private readonly apiVersion = 'v9.2';
+  private readonly logger = createLogger('D365Service');
+  private readonly apiVersion = D365_API_CONFIG.VERSION;
   private readonly baseHeaders = {
-    'OData-MaxVersion': '4.0',
-    'OData-Version': '4.0',
-    'Accept': 'application/json',
-    'Content-Type': 'application/json; charset=utf-8',
-    'Prefer': 'odata.include-annotations="*"'
+    ...D365_HEADERS,
+    'Prefer': D365_API_CONFIG.PREFER_ANNOTATIONS
   };
 
   constructor() {
@@ -37,13 +38,13 @@ export class D365Service {
       try {
         // Don't log full URL for security - could contain sensitive info
         const urlDomain = new URL(config.D365_URL).hostname;
-        console.log(`[D365] Service initialized with domain: ${urlDomain}`);
+        this.logger.info(`Service initialized with domain: ${urlDomain}`);
       } catch (error) {
-        console.error('[D365] Invalid D365_URL provided:', error instanceof Error ? error.message : 'Unknown error');
+        this.logger.error('Invalid D365_URL provided', error);
         // Continue in stub mode if URL is invalid
       }
     } else {
-      console.log('[D365] Service initialized in stub mode - no D365_URL configured');
+      this.logger.info('Service initialized in stub mode - no D365_URL configured');
     }
   }
 
@@ -299,11 +300,16 @@ export class D365Service {
     }
 
     try {
-      // Azure Object IDs don't need escaping like emails do
-      const url = `${config.D365_URL}/api/data/${this.apiVersion}/contacts`;
-      const query = `?$filter=msevtmgt_aadobjectid eq '${azureObjectId}'&$select=contactid,firstname,lastname,emailaddress1,msevtmgt_aadobjectid,_parentcustomerid_value&$top=1`;
+      // Build query parameters
+      const queryParams = {
+        $filter: buildFilterExpression('msevtmgt_aadobjectid', 'EQUALS', azureObjectId),
+        $select: 'contactid,firstname,lastname,emailaddress1,msevtmgt_aadobjectid,_parentcustomerid_value',
+        $top: 1
+      };
       
-      const response = await fetch(url + query, {
+      const url = buildD365Url(config.D365_URL, 'contacts', undefined, queryParams);
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           ...this.baseHeaders,
@@ -313,14 +319,17 @@ export class D365Service {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[D365] Contact query failed: ${response.status} - ${errorText}`);
+        this.logger.error(`Contact query failed: ${response.status}`, undefined, { 
+          status: response.status,
+          error: errorText 
+        });
         return null;
       }
 
       const data = await response.json() as { value: any[] };
       return data.value && data.value.length > 0 ? data.value[0] : null;
     } catch (error) {
-      console.error('[D365] Error querying contact by Azure ID:', error);
+      this.logger.error('Error querying contact by Azure ID', error);
       return null;
     }
   }
@@ -343,10 +352,13 @@ export class D365Service {
     }
 
     try {
-      const url = `${config.D365_URL}/api/data/${this.apiVersion}/accounts(${accountId})`;
-      const query = `?$select=accountid,name,tc_organizationleadtype,createdon,modifiedon`;
+      const queryParams = {
+        $select: 'accountid,name,tc_organizationleadtype,createdon,modifiedon'
+      };
       
-      const response = await fetch(url + query, {
+      const url = buildD365Url(config.D365_URL, 'accounts', accountId, queryParams);
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           ...this.baseHeaders,
@@ -359,13 +371,16 @@ export class D365Service {
           return null;
         }
         const errorText = await response.text();
-        console.error(`[D365] Account query failed: ${response.status} - ${errorText}`);
+        this.logger.error(`Account query failed: ${response.status}`, undefined, {
+          status: response.status,
+          error: errorText
+        });
         return null;
       }
 
       return await response.json();
     } catch (error) {
-      console.error('[D365] Error querying account:', error);
+      this.logger.error('Error querying account', error);
       return null;
     }
   }

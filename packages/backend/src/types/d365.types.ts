@@ -100,51 +100,6 @@ export interface D365QueryResult<T> {
 }
 
 /**
- * D365 Lead entity mapping - OBSOLETE
- * @deprecated This interface mapped to the old Contact-based approach.
- * The application now uses tc_everychildlead entity.
- * See lead.service.ts for the D365EveryChildLead interface.
- * 
- * This interface is kept temporarily for reference but should be removed
- * once all migrations are complete.
- */
-export interface D365Lead {
-  contactid: string;
-  firstname: string;
-  lastname: string;
-  emailaddress1?: string;
-  telephone1?: string;
-  telephone2?: string;
-  
-  // Address fields
-  address1_line1?: string;
-  address1_line2?: string;
-  address1_city?: string;
-  address1_stateorprovince?: string;
-  address1_postalcode?: string;
-  address1_country?: string;
-  
-  // Custom fields
-  tc_initiative: string; // CRITICAL: Initiative assignment
-  tc_leadstatus?: string;
-  tc_leadtype?: string;
-  tc_priority?: string;
-  tc_source?: string;
-  tc_notes?: string;
-  tc_tags?: string;
-  
-  // Assignment fields
-  _ownerid_value?: string;
-  _tc_assignedorganization_value?: string;
-  
-  // Metadata
-  createdon: string;
-  modifiedon: string;
-  tc_lastcontactedon?: string;
-  tc_assignedon?: string;
-}
-
-/**
  * Type guard to check if a value is a D365Filter
  */
 export function isD365Filter(value: any): value is D365Filter {

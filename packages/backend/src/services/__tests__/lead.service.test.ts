@@ -35,6 +35,8 @@ const TEST_ORG_GUID = 'f1e2d3c4-b5a6-9870-dcba-fe4321567890';
 describe('LeadService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Set up required environment variables
+    process.env.D365_URL = 'https://test.dynamics.com';
   });
 
   describe('getLeads', () => {
@@ -76,10 +78,11 @@ describe('LeadService', () => {
       );
       
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('statecode eq 0');
-      expect(url).toContain(`_tc_initiative_value eq '${TEST_INITIATIVE_GUID}'`);
-      expect(url).toContain(`_tc_fosterorganization_value eq '${TEST_ORG_GUID}'`);
-      expect(url).not.toContain('tc_eclead_tc_ecleadsvolunteerorg');
+      const decodedUrl = decodeURIComponent(url);
+      expect(decodedUrl).toContain('statecode eq 0');
+      expect(decodedUrl).toContain(`_tc_initiative_value eq '${TEST_INITIATIVE_GUID}'`);
+      expect(decodedUrl).toContain(`_tc_fosterorganization_value eq '${TEST_ORG_GUID}'`);
+      expect(decodedUrl).not.toContain('tc_eclead_tc_ecleadsvolunteerorg');
     });
 
     it('should build correct filter for volunteer organization', async () => {
@@ -100,10 +103,11 @@ describe('LeadService', () => {
       await leadService.getLeads(filter);
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain(`tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi/any(o:o/_tc_volunteerorganization_value eq '${TEST_ORG_GUID}')`);
+      const decodedUrl = decodeURIComponent(url);
+      expect(decodedUrl).toContain(`tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi/any(o:o/_tc_volunteerorganization_value eq '${TEST_ORG_GUID}')`);
       // Note: _tc_fosterorganization_value appears in $select but not in $filter for volunteer-only orgs
-      expect(url).toContain('$filter=');
-      const filterPart = url.split('$filter=')[1].split('&')[0];
+      expect(decodedUrl).toContain('$filter=');
+      const filterPart = decodedUrl.split('$filter=')[1].split('&')[0];
       expect(filterPart).not.toContain('_tc_fosterorganization_value eq');
     });
 
@@ -125,8 +129,9 @@ describe('LeadService', () => {
       await leadService.getLeads(filter);
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      const decodedUrl = decodeURIComponent(url);
       // Should have OR condition with both filters
-      expect(url).toMatch(/\(.*_tc_fosterorganization_value.*or.*tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi.*\)/);
+      expect(decodedUrl).toMatch(/\(.*_tc_fosterorganization_value.*or.*tc_tc_ecleadsvolunteerorg_ECLead_tc_everychi.*\)/);
     });
 
     it('should include expand clause for related entities', async () => {
@@ -147,7 +152,8 @@ describe('LeadService', () => {
       await leadService.getLeads(filter);
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('$expand=tc_Contact($select=fullname,emailaddress1),tc_LeadOwner($select=fullname)');
+      const decodedUrl = decodeURIComponent(url);
+      expect(decodedUrl).toContain('$expand=tc_Contact($select=fullname,emailaddress1),tc_LeadOwner($select=fullname)');
     });
 
     it('should map tc_everychildlead to Lead interface correctly', async () => {
@@ -299,11 +305,11 @@ describe('LeadService', () => {
       const result = await leadService.getLeads(filter);
       
       expect(consoleSpy).toHaveBeenCalledWith(
-        '[LeadService] Unknown D365 initiative GUID:',
-        expect.objectContaining({
+        '[LeadService] Unknown D365 initiative GUID',
+        {
           leadId: 'e1f2a3b4-c5d6-7890-abcd-ef1234567890',
           unknownGuid: 'unknown-guid-9999-9999-9999-999999999999'
-        })
+        }
       );
       expect(result.value[0].initiativeId).toBe(''); // Empty string for unknown
       
@@ -410,8 +416,9 @@ describe('LeadService', () => {
       await leadService.getLeads(filter, {}, { orderBy: 'updatedAt', orderDirection: 'desc' });
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('$orderby=modifiedon desc');
-      expect(url).not.toContain('updatedAt');
+      const decodedUrl = decodeURIComponent(url);
+      expect(decodedUrl).toContain('$orderby=modifiedon desc');
+      expect(decodedUrl).not.toContain('updatedAt');
     });
 
     it('should map createdAt to createdon in orderBy clause', async () => {
@@ -432,7 +439,8 @@ describe('LeadService', () => {
       await leadService.getLeads(filter, {}, { orderBy: 'createdAt', orderDirection: 'asc' });
 
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('$orderby=createdon asc');
+      const decodedUrl = decodeURIComponent(url);
+      expect(decodedUrl).toContain('$orderby=createdon asc');
     });
 
     it('should handle unknown sort fields with default fallback', async () => {
@@ -454,10 +462,11 @@ describe('LeadService', () => {
 
       await leadService.getLeads(filter, {}, { orderBy: 'unknownField' });
 
-      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Unknown sort field, using default:', 'unknownField');
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Unknown sort field, using default', { field: 'unknownField' });
       
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('$orderby=modifiedon desc');
+      const decodedUrl = decodeURIComponent(url);
+      expect(decodedUrl).toContain('$orderby=modifiedon desc');
       
       consoleSpy.mockRestore();
     });
@@ -482,11 +491,12 @@ describe('LeadService', () => {
       // Try to sort by an expanded field (which isn't supported by OData)
       await leadService.getLeads(filter, {}, { orderBy: 'subjectName' });
 
-      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Unknown sort field, using default:', 'subjectName');
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Unknown sort field, using default', { field: 'subjectName' });
       
       const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('$orderby=modifiedon desc');
-      expect(url).not.toContain('tc_Contact/fullname');
+      const decodedUrl = decodeURIComponent(url);
+      expect(decodedUrl).toContain('$orderby=modifiedon desc');
+      expect(decodedUrl).not.toContain('tc_Contact/fullname');
       
       consoleSpy.mockRestore();
     });
@@ -508,7 +518,7 @@ describe('LeadService', () => {
 
       const result = await leadService.getLeads(filter);
 
-      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Missing organizationLeadType in JWT:', {
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Missing organizationLeadType in JWT', undefined, {
         organizationId: TEST_ORG_GUID,
         userId: 'test-user'
       });
@@ -533,7 +543,7 @@ describe('LeadService', () => {
 
       const result = await leadService.getLeads(filter);
 
-      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Invalid organizationLeadType format:', {
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Invalid organizationLeadType format', undefined, {
         organizationLeadType: 'invalid,format,abc',
         organizationId: TEST_ORG_GUID,
         userId: 'test-user'
