@@ -2,9 +2,10 @@ import { d365Service } from './d365.service';
 import { initiativeMappingService } from './initiative-mapping.service';
 import { getInitiativeIdFromGuid } from '../config/initiatives.config';
 import { AppError } from '../utils/errors';
-import { escapeODataString, buildContainsExpression, combineFilters, buildD365Url, buildQueryString } from '../utils/d365/odata-utils';
+import { escapeODataString, buildContainsExpression, combineFilters, buildD365Url } from '../utils/d365/odata-utils';
 import { auditLogger, SecurityEventType } from '../utils/d365/audit-logger';
 import { parseD365FetchError } from '../utils/d365/error-parser';
+import { withRetry, RetryOptions } from '../utils/d365/retry-helper';
 import { createLogger } from '../utils/logger';
 import { 
   D365_LEAD_FIELDS, 
@@ -62,6 +63,184 @@ interface D365EveryChildLead {
  */
 export class LeadService {
   private readonly logger = createLogger('LeadService');
+  
+  // Cache field selections since they never change
+  private readonly selectClause = buildLeadSelectClause();
+  private readonly expandClause = buildLeadExpandClause();
+  
+  // Retry configuration for D365 API calls
+  private readonly retryOptions: RetryOptions = {
+    maxRetries: 3,
+    initialDelay: 1000,
+    backoffFactor: 2,
+    retryableStatusCodes: [429, 500, 502, 503, 504],
+    logger: (msg, data) => this.logger.debug(`[Retry] ${msg}`, data)
+  };
+  
+  /**
+   * Validate organization context is present (fail-secure check)
+   * Logs security event if validation fails
+   * 
+   * @param initiativeFilter - Security filter to validate
+   * @param context - Additional context for logging
+   * @returns true if valid, false if invalid
+   */
+  private async validateOrganizationContext(
+    initiativeFilter: D365Filter,
+    context: { operation: string; resource?: string }
+  ): Promise<boolean> {
+    if (!initiativeFilter.organizationId) {
+      this.logger.warn('Organization ID missing from request context', {
+        userId: initiativeFilter.userId,
+        initiative: initiativeFilter.initiative,
+        operation: context.operation
+      });
+      
+      await auditLogger.logSecurityEvent(SecurityEventType.MISSING_ORGANIZATION_DATA, {
+        userId: initiativeFilter.userId || 'unknown',
+        initiative: initiativeFilter.initiative,
+        errorMessage: 'Organization ID missing from request context',
+        resource: context.resource,
+        result: 'failure'
+      });
+      
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Build D365 request headers
+   * 
+   * @param token - Bearer token for authorization
+   * @returns Headers object for D365 API requests
+   */
+  private buildD365Headers(token: string): Record<string, string> {
+    return {
+      'Authorization': `Bearer ${token}`,
+      ...D365_HEADERS,
+      'Prefer': D365_API_CONFIG.PREFER_ANNOTATIONS
+    };
+  }
+  
+  /**
+   * Log organization security validation failure
+   * 
+   * @param initiativeFilter - Security filter that failed validation
+   * @param errorType - Type of validation error
+   * @param context - Additional context for logging
+   */
+  private async logOrganizationValidationFailure(
+    initiativeFilter: D365Filter,
+    errorType: 'INVALID_FORMAT' | 'MISSING_TYPE',
+    context: { errorMessage: string }
+  ): Promise<void> {
+    const logData = {
+      organizationLeadType: initiativeFilter.organizationLeadType,
+      organizationId: initiativeFilter.organizationId,
+      userId: initiativeFilter.userId
+    };
+    
+    this.logger.error(context.errorMessage, undefined, logData);
+    
+    const eventType = errorType === 'INVALID_FORMAT' 
+      ? SecurityEventType.INVALID_ORGANIZATION_TYPE 
+      : SecurityEventType.MISSING_ORGANIZATION_DATA;
+    
+    await auditLogger.logSecurityEvent(eventType, {
+      userId: initiativeFilter.userId || 'unknown',
+      organizationId: initiativeFilter.organizationId,
+      errorMessage: context.errorMessage,
+      details: errorType === 'INVALID_FORMAT' 
+        ? { organizationLeadType: initiativeFilter.organizationLeadType }
+        : undefined
+    });
+  }
+  
+  /**
+   * Execute D365 query with retry logic
+   * 
+   * @param url - D365 API URL
+   * @param token - Bearer token
+   * @param context - Context for error logging
+   * @returns Response from D365
+   */
+  private async executeD365Query(
+    url: string,
+    token: string,
+    context: { userId: string; operation: string; filter?: string }
+  ): Promise<Response> {
+    return withRetry(
+      async () => {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: this.buildD365Headers(token)
+        });
+        
+        if (!response.ok) {
+          const error = await parseD365FetchError(response);
+          
+          // Don't log 404 as failure for single resource queries
+          if (response.status !== 404) {
+            await auditLogger.logD365QueryFailed(
+              context.userId,
+              'tc_everychildleads',
+              error,
+              context.filter || url
+            );
+          }
+          
+          // Create a new error with status code for retry logic instead of mutating
+          const retryableError = Object.assign(
+            Object.create(Object.getPrototypeOf(error)),
+            error,
+            { statusCode: response.status }
+          );
+          throw retryableError;
+        }
+        
+        return response;
+      },
+      this.retryOptions
+    );
+  }
+  
+  /**
+   * Get D365 initiative GUID with error handling
+   * 
+   * @param initiativeId - Application initiative ID (e.g., 'ec-oregon')
+   * @returns D365 GUID or throws AppError
+   */
+  private getD365InitiativeGuid(initiativeId: string): string {
+    try {
+      return initiativeMappingService.getD365InitiativeGuid(initiativeId);
+    } catch (error) {
+      this.logger.error('Failed to map initiative to D365 GUID', error, {
+        initiative: initiativeId
+      });
+      // Return a generic error message to avoid exposing internal details
+      throw new AppError('Invalid initiative configuration', 500);
+    }
+  }
+  
+  /**
+   * Build user organization context object
+   * 
+   * @param initiativeFilter - Filter containing organization data
+   * @returns Organization object or undefined
+   */
+  private buildUserOrganization(
+    initiativeFilter: D365Filter
+  ): { id: string; name: string } | undefined {
+    return initiativeFilter.organizationName 
+      ? {
+          id: initiativeFilter.organizationId!,
+          name: initiativeFilter.organizationName
+        }
+      : undefined;
+  }
+  
   /**
    * Build secure OData filter that ALWAYS includes initiative constraint
    * This is the primary security mechanism preventing cross-initiative data access
@@ -85,16 +264,7 @@ export class LeadService {
     }
     
     // Convert initiative ID to D365 GUID
-    let d365InitiativeGuid: string;
-    try {
-      d365InitiativeGuid = initiativeMappingService.getD365InitiativeGuid(initiativeFilter.initiative);
-    } catch (error) {
-      this.logger.error('Failed to map initiative to D365 GUID', error, {
-        initiative: initiativeFilter.initiative
-      });
-      // Return empty results rather than exposing internal error
-      throw new AppError('Invalid initiative configuration', 500);
-    }
+    const d365InitiativeGuid = this.getD365InitiativeGuid(initiativeFilter.initiative);
     
     filters.push(`${D365_LEAD_FIELDS.INITIATIVE} eq '${escapeODataString(d365InitiativeGuid)}'`);
     
@@ -107,17 +277,11 @@ export class LeadService {
       if (initiativeFilter.organizationLeadType) {
         // Validate format: should be comma-separated numbers
         if (!isValidOrganizationLeadType(initiativeFilter.organizationLeadType)) {
-          this.logger.error('Invalid organizationLeadType format', undefined, {
-            organizationLeadType: initiativeFilter.organizationLeadType,
-            organizationId: initiativeFilter.organizationId,
-            userId: initiativeFilter.userId
-          });
-          await auditLogger.logSecurityEvent(SecurityEventType.INVALID_ORGANIZATION_TYPE, {
-            userId: initiativeFilter.userId || 'unknown',
-            organizationId: initiativeFilter.organizationId,
-            errorMessage: 'Invalid organizationLeadType format',
-            details: { organizationLeadType: initiativeFilter.organizationLeadType }
-          });
+          await this.logOrganizationValidationFailure(
+            initiativeFilter,
+            'INVALID_FORMAT',
+            { errorMessage: 'Invalid organizationLeadType format' }
+          );
           // Security: Return empty results for invalid data
           throw new AppError('Invalid organization configuration', 400);
         }
@@ -133,15 +297,11 @@ export class LeadService {
         }
       } else {
         // Security: No organizationLeadType means the user's JWT is incomplete
-        this.logger.error('Missing organizationLeadType in JWT', undefined, {
-          organizationId: initiativeFilter.organizationId,
-          userId: initiativeFilter.userId
-        });
-        await auditLogger.logSecurityEvent(SecurityEventType.MISSING_ORGANIZATION_DATA, {
-          userId: initiativeFilter.userId || 'unknown',
-          organizationId: initiativeFilter.organizationId,
-          errorMessage: 'Missing organizationLeadType in JWT'
-        });
+        await this.logOrganizationValidationFailure(
+          initiativeFilter,
+          'MISSING_TYPE',
+          { errorMessage: 'Missing organizationLeadType in JWT' }
+        );
         // Throw error to be handled by getLeads
         throw new AppError('Missing organization type configuration', 400);
       }
@@ -168,11 +328,9 @@ export class LeadService {
   private buildODataQuery(options: D365QueryOptions): string {
     const params: string[] = [];
     
-    // Select fields from tc_everychildlead
-    params.push(`$select=${buildLeadSelectClause()}`);
-    
-    // Expand related entities
-    params.push(`$expand=${buildLeadExpandClause()}`);
+    // Use cached field selections
+    params.push(`$select=${this.selectClause}`);
+    params.push(`$expand=${this.expandClause}`);
     
     // Pagination
     if (options.limit) {
@@ -269,17 +427,11 @@ export class LeadService {
   ): Promise<D365QueryResult<Lead>> {
     try {
       // CRITICAL: Fail-secure check - require organization ID
-      if (!initiativeFilter.organizationId) {
-        this.logger.warn('Organization ID missing from request context', {
-          userId: initiativeFilter.userId,
-          initiative: initiativeFilter.initiative
-        });
-        await auditLogger.logSecurityEvent(SecurityEventType.MISSING_ORGANIZATION_DATA, {
-          userId: initiativeFilter.userId || 'unknown',
-          initiative: initiativeFilter.initiative,
-          errorMessage: 'Organization ID missing from request context',
-          result: 'failure'
-        });
+      const isValid = await this.validateOrganizationContext(initiativeFilter, {
+        operation: 'getLeads'
+      });
+      
+      if (!isValid) {
         return { value: [], totalCount: 0 };
       }
       
@@ -301,8 +453,6 @@ export class LeadService {
         }
         throw error;
       }
-      const queryParams = this.buildODataQuery(options);
-      
       // Log query for audit (without token)
       this.logger.info('Querying leads with filter', {
         initiative: initiativeFilter.initiative,
@@ -325,41 +475,24 @@ export class LeadService {
         `GET /api/v1/leads`
       );
       
-      // Build D365 query URL
-      const queryOptions: Record<string, any> = {
-        $filter: oDataFilter
-      };
-      
-      // Parse additional query params and merge
-      const params = new URLSearchParams(queryParams);
-      params.forEach((value, key) => {
-        queryOptions[key] = value;
-      });
-      
-      const url = buildD365Url(process.env.D365_URL!, 'tc_everychildleads', undefined, queryOptions);
+      // Build D365 query URL with all parameters
+      const queryString = this.buildODataQuery(options);
+      const url = buildD365Url(
+        process.env.D365_URL!, 
+        'tc_everychildleads',
+        undefined,
+        { $filter: oDataFilter, ...Object.fromEntries(new URLSearchParams(queryString)) }
+      );
       
       // Log the full query for debugging (without sensitive token)
       this.logger.info('D365 Query URL', { url: url.replace(process.env.D365_URL!, '[D365_URL]') });
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          ...D365_HEADERS,
-          'Prefer': D365_API_CONFIG.PREFER_ANNOTATIONS
-        }
+      // Execute query with retry logic
+      const response = await this.executeD365Query(url, token, {
+        userId: initiativeFilter.userId || 'unknown',
+        operation: 'getLeads',
+        filter: oDataFilter
       });
-      
-      if (!response.ok) {
-        const error = await parseD365FetchError(response);
-        await auditLogger.logD365QueryFailed(
-          initiativeFilter.userId || 'unknown',
-          'tc_everychildleads',
-          error,
-          oDataFilter
-        );
-        throw error;
-      }
       
       const data = await response.json() as { 
         value: D365EveryChildLead[]; 
@@ -368,10 +501,7 @@ export class LeadService {
       };
       
       // Map results with user organization context
-      const userOrganization = initiativeFilter.organizationName ? {
-        id: initiativeFilter.organizationId,
-        name: initiativeFilter.organizationName
-      } : undefined;
+      const userOrganization = this.buildUserOrganization(initiativeFilter);
       
       const leads = data.value.map((lead: D365EveryChildLead) => 
         this.mapD365ToLead(lead, userOrganization)
@@ -410,18 +540,12 @@ export class LeadService {
   ): Promise<Lead | null> {
     try {
       // CRITICAL: Fail-secure check - require organization ID
-      if (!initiativeFilter.organizationId) {
-        this.logger.warn('Organization ID missing from request context', {
-          userId: initiativeFilter.userId,
-          initiative: initiativeFilter.initiative
-        });
-        await auditLogger.logSecurityEvent(SecurityEventType.MISSING_ORGANIZATION_DATA, {
-          userId: initiativeFilter.userId || 'unknown',
-          initiative: initiativeFilter.initiative,
-          errorMessage: 'Organization ID missing from request context',
-          resource: `lead:${leadId}`,
-          result: 'failure'
-        });
+      const isValid = await this.validateOrganizationContext(initiativeFilter, {
+        operation: 'getLeadById',
+        resource: `lead:${leadId}`
+      });
+      
+      if (!isValid) {
         return null;
       }
       
@@ -431,34 +555,27 @@ export class LeadService {
         throw new AppError('Unable to authenticate with D365', 500);
       }
       
-      // Query specific lead with expanded lookups
-      const selectClause = buildLeadSelectClause();
-      const expandClause = buildLeadExpandClause();
+      // Build URL using consistent utility
+      const queryOptions = {
+        $select: this.selectClause,
+        $expand: this.expandClause
+      };
       
-      const url = `${process.env.D365_URL}/api/data/v9.2/tc_everychildleads(${leadId})?$select=${selectClause}&$expand=${expandClause}`;
+      const url = buildD365Url(process.env.D365_URL!, 'tc_everychildleads', leadId, queryOptions);
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'OData-MaxVersion': '4.0',
-          'OData-Version': '4.0',
-          'Accept': 'application/json'
+      // Execute query with retry logic
+      let response: Response;
+      try {
+        response = await this.executeD365Query(url, token, {
+          userId: initiativeFilter.userId || 'unknown',
+          operation: 'getLeadById',
+          filter: `Lead ID: ${leadId}`
+        });
+      } catch (error) {
+        // Handle 404 as null return (not found)
+        if (error instanceof AppError && error.statusCode === 404) {
+          return null;
         }
-      });
-      
-      if (response.status === 404) {
-        return null;
-      }
-      
-      if (!response.ok) {
-        const error = await parseD365FetchError(response);
-        await auditLogger.logD365QueryFailed(
-          initiativeFilter.userId || 'unknown',
-          'tc_everychildleads',
-          error,
-          `Lead ID: ${leadId}`
-        );
         throw error;
       }
       
@@ -468,7 +585,7 @@ export class LeadService {
       // Convert initiative ID to D365 GUID for comparison
       let expectedD365Guid: string;
       try {
-        expectedD365Guid = initiativeMappingService.getD365InitiativeGuid(initiativeFilter.initiative);
+        expectedD365Guid = this.getD365InitiativeGuid(initiativeFilter.initiative);
       } catch (error) {
         this.logger.error('Failed to validate initiative for lead access', undefined, {
           initiative: initiativeFilter.initiative,
@@ -497,10 +614,7 @@ export class LeadService {
       }
       
       // Map result with user organization context
-      const userOrganization = initiativeFilter.organizationName ? {
-        id: initiativeFilter.organizationId,
-        name: initiativeFilter.organizationName
-      } : undefined;
+      const userOrganization = this.buildUserOrganization(initiativeFilter);
       
       return this.mapD365ToLead(d365Lead, userOrganization);
     } catch (error) {

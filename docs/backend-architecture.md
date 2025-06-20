@@ -28,6 +28,7 @@ Services are broken into focused, reusable modules:
 - **Core Services**: Auth, JWT, D365 client
 - **Domain Services**: Lead, Contact, Organization
 - **Utility Services**: Query builders, mappers, validators
+- **Infrastructure**: Retry logic, error parsing, audit logging
 
 ## Authentication Flow
 
@@ -48,6 +49,22 @@ sequenceDiagram
 2. **enforceInitiative**: Injects D365 security filter based on groups
 3. **requireRoles**: Enforces role-based access control
 4. **auditLog**: Logs all data access for security monitoring
+
+## Infrastructure Patterns
+
+### Retry Logic
+All D365 API calls use exponential backoff retry logic:
+- Default: 3 retries with 2x backoff
+- Retryable status codes: 429, 500, 502, 503, 504
+- Network errors automatically retried
+- Configurable per service
+
+### Error Handling
+Consistent error handling across services:
+- D365 errors parsed to user-friendly messages
+- Security failures logged with audit events
+- Fail-secure approach (empty results on errors)
+- No internal details exposed to clients
 
 ## D365 Integration Pattern
 
@@ -118,6 +135,41 @@ Every D365 query MUST include:
 - Default pagination limit: 50, max: 100
 - Use $select to minimize payload size
 - Batch related queries when possible
+- Field selections cached at service initialization
+
+## Service Implementation Patterns
+
+### Lead Service Architecture
+The lead service demonstrates key patterns:
+
+```typescript
+class LeadService {
+  // Cached field selections for performance
+  private readonly selectClause = buildLeadSelectClause();
+  private readonly expandClause = buildLeadExpandClause();
+  
+  // Retry configuration
+  private readonly retryOptions: RetryOptions = {
+    maxRetries: 3,
+    initialDelay: 1000,
+    backoffFactor: 2
+  };
+  
+  // Helper methods for common patterns
+  private validateOrganizationContext(...) { }
+  private buildD365Headers(...) { }
+  private executeD365Query(...) { }  // With retry logic
+  private getD365InitiativeGuid(...) { }
+  private buildUserOrganization(...) { }
+}
+```
+
+### Key Patterns:
+1. **Cached Constants**: Field selections computed once at startup
+2. **Retry Wrapper**: All D365 calls wrapped with retry logic
+3. **Helper Methods**: Common patterns extracted for reuse
+4. **Fail-Secure**: Invalid contexts return empty results
+5. **Audit Logging**: All security events tracked
 
 ## Monitoring & Logging
 

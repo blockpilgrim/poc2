@@ -684,7 +684,7 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
    - ✅ Create `/backend/src/constants/d365/query-constants.ts` for pagination limits, state codes, etc. (includes mapping functions)
    - ✅ Keep these backend-specific, not in shared package
 
-3. **Success criteria**: 
+3. **Success criteria**:
    - ✅ All utilities tested and documented (124/129 tests passing)
    - ✅ No changes to API behavior (lead service tests confirm)
    - ✅ lead.service.ts imports from new locations
@@ -706,23 +706,41 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - Test suite needs minor updates for new logger format and URL encoding
 
 #### Phase 2: Reduce Duplication (1 day)
-**Status**: Not started
+**Status**: ✅ COMPLETED (including Phase 2.1 improvements)
 **Goal**: DRY up the code without architectural changes
 
 1. **In lead.service.ts**:
-   - Extract duplicate field selection logic (lines 157-170 and 399-421) into class properties
-   - Create helper methods for common filter patterns
-   - Consolidate similar logging statements
+   - ✅ Extracted duplicate field selection logic into cached class properties (`selectClause`, `expandClause`)
+   - ✅ Created helper methods for common patterns:
+     - `validateOrganizationContext()` - Organization validation with security logging
+     - `buildD365Headers()` - Consistent header construction
+     - `executeD365Query()` - D365 fetch with retry logic
+     - `getD365InitiativeGuid()` - Initiative GUID mapping with error handling
+     - `buildUserOrganization()` - User organization context building
+     - `logOrganizationValidationFailure()` - Security validation logging
+   - ✅ Consolidated similar logging statements using helpers
 
 2. **Add retry logic** to D365 API calls:
-   - Wrap fetch calls with RetryHelper
-   - Configure retry for transient failures (network, 503, etc.)
-   - Log retry attempts for monitoring
+   - ✅ All fetch calls wrapped with `withRetry()` helper
+   - ✅ Configured for transient failures (429, 500, 502, 503, 504, network errors)
+   - ✅ Exponential backoff: 1s → 2s → 4s with jitter
+   - ✅ Retry attempts logged for monitoring
 
 3. **Success criteria**:
-   - No duplicate code blocks in lead.service.ts
-   - All D365 calls have retry capability
-   - Comprehensive test coverage for changes
+   - ✅ No duplicate code blocks in lead.service.ts
+   - ✅ All D365 calls have retry capability
+   - ✅ All tests passing (2 test updates required for logger format)
+
+**Phase 2.1 Additional Improvements**:
+- ✅ Removed unused `buildQueryString` import
+- ✅ Fixed error object mutation (created proper error copies)
+- ✅ Simplified query parameter building (reduced complexity)
+- ✅ Improved type safety (no more `(error as any).statusCode`)
+
+**Documentation Updates**:
+- ✅ Updated backend-architecture.md with retry patterns and service architecture
+- ✅ Updated d365-integration-guide.md with error handling section
+- ✅ Updated backend-troubleshooting.md with retry debugging guidance
 
 #### Phase 3: Improve Maintainability (1-2 days)
 **Status**: Not started
@@ -772,16 +790,26 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 
 ### Implementation Notes for Future Sessions
 
-**Key Files to Focus On**:
-- Primary: `/backend/src/services/lead.service.ts` (489 lines)
-- Related: `/backend/src/services/d365.service.ts`, `/backend/src/services/initiative-mapping.service.ts`
-- Tests: `/backend/src/services/lead.service.test.ts`
+**Current State After Phase 2**:
+- `lead.service.ts` is now 629 lines (up from 489) due to well-documented helper methods
+- All D365 calls now have retry logic with exponential backoff
+- Common patterns extracted into reusable helper methods
+- Field selections cached as class properties for performance
+- Error handling improved with proper error copying (no mutation)
+- All tests passing (2 tests updated for new logger format)
 
-**Patterns to Extract from Abandoned Code** (cherry-pick only):
-- Retry logic from `_unused_implementations/d365/d365-client.service.ts`
-- OData utilities from `_unused_implementations/d365/d365-query-builder.service.ts`
-- Error parsing from `_unused_implementations/d365/d365-client.service.ts`
-- DO NOT use entity mappings or field names (wrong data model)
+**Key Files to Focus On for Phase 3**:
+- Primary: `/backend/src/services/lead.service.ts` (629 lines)
+  - `buildSecureODataFilter` method (lines ~213-293) needs splitting - still 80+ lines
+  - Complex nested conditions in organization filtering logic
+- Related: `/backend/src/services/d365.service.ts`, `/backend/src/services/initiative-mapping.service.ts`
+- Tests: `/backend/src/services/__tests__/lead.service.test.ts`
+
+**What Was Completed from Abandoned Code**:
+- ✅ Retry logic extracted and implemented
+- ✅ OData utilities extracted and implemented
+- ✅ Error parsing extracted and implemented
+- ✅ Audit logging extracted and implemented
 
 **Critical Constraints**:
 - The current implementation uses `tc_everychildlead` entity - this is correct
@@ -795,14 +823,76 @@ Beyond specific features, Partner Portal v2.0 must adhere to the following key n
 - Verify no changes to API responses
 - Test with real D365 data if possible
 
+**Phase 3 Specific Context**:
+
+**Available Helper Methods (created in Phase 2)**:
+```typescript
+// Use these in Phase 3 refactoring:
+validateOrganizationContext() // Validates org context with security logging
+buildD365Headers()           // Standard D365 headers
+executeD365Query()          // Fetch with retry (handles 404 specially)
+getD365InitiativeGuid()     // Maps initiative ID to D365 GUID
+buildUserOrganization()     // Creates org context object
+logOrganizationValidationFailure() // Logs org validation errors
+```
+
+**Key Improvements to Preserve**:
+1. Field selections are cached in constructor (don't recompute)
+2. All D365 calls use `executeD365Query()` for retry logic
+3. Error objects are never mutated (proper copies created)
+4. Consistent logging with `this.logger` (not console.*)
+
+**Phase 3 Focus Areas**:
+1. **buildSecureODataFilter** breakdown suggestions:
+   - `addInitiativeFilter(filters: string[], initiativeId: string)`
+   - `addOrganizationFilters(filters: string[], initiativeFilter: D365Filter)`
+   - `validateOrganizationType(organizationLeadType: string)`
+   - `buildOrganizationQuery(orgId: string, orgType: string): string`
+
+2. **Type Safety Improvements Needed**:
+   - Replace `Record<string, any>` in buildD365Url call (line ~484)
+   - Create proper interfaces for query options
+   - Add return types to all private methods
+
+3. **Error Handling Consistency**:
+   - Document when to throw vs return null vs return empty
+   - Consider creating error codes enum
+   - Standardize error messages
+
 **Common Pitfalls to Avoid**:
 - Don't over-engineer utilities for a POC
+- Don't break the retry logic when refactoring
+- Keep helper methods focused (single responsibility)
+- Maintain backward compatibility with API responses
 - Don't create abstractions that don't fit the data model
 - Don't change the working data flow
 - Don't mix frontend and backend constants
+
+**Files Created/Updated in Phase 2**:
+- `/PHASE2-IMPLEMENTATION-SUMMARY.md` - Full details of Phase 2 changes
+- `/PHASE2.1-IMPLEMENTATION-SUMMARY.md` - Phase 2.1 improvements
+- `/docs/backend-architecture.md` - Added retry patterns and service architecture
+- `/docs/d365-integration-guide.md` - Added error handling section
+- `/docs/backend-troubleshooting.md` - Added retry debugging guidance
 
 **Success Metrics**:
 - Code coverage remains at or above current levels
 - No new TypeScript errors
 - API response times unchanged or improved
 - Zero breaking changes to API contract
+
+### Summary for Next Session
+
+**Completed**: Phase 1 and Phase 2 (including Phase 2.1) of backend refactoring are complete. The lead service now has:
+- Robust retry logic on all D365 calls
+- No code duplication for common patterns
+- Well-organized helper methods
+- Improved error handling and type safety
+- Updated documentation reflecting new patterns
+
+**Next Priority**: Phase 3 - Improve Maintainability
+- Primary focus: Break down `buildSecureODataFilter` (80+ lines)
+- Secondary: Improve type safety and error consistency
+- File to work on: `/backend/src/services/lead.service.ts`
+
+**Important**: All existing functionality and tests are working. The refactoring has been purely internal improvements with no API changes.

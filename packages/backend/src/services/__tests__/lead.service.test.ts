@@ -518,8 +518,9 @@ describe('LeadService', () => {
 
       const result = await leadService.getLeads(filter);
 
-      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Missing organizationLeadType in JWT', undefined, {
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Missing organizationLeadType in JWT', {
         organizationId: TEST_ORG_GUID,
+        organizationLeadType: undefined,
         userId: 'test-user'
       });
       expect(result).toEqual({ value: [], totalCount: 0 });
@@ -543,7 +544,7 @@ describe('LeadService', () => {
 
       const result = await leadService.getLeads(filter);
 
-      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Invalid organizationLeadType format', undefined, {
+      expect(consoleSpy).toHaveBeenCalledWith('[LeadService] Invalid organizationLeadType format', {
         organizationLeadType: 'invalid,format,abc',
         organizationId: TEST_ORG_GUID,
         userId: 'test-user'

@@ -33,8 +33,14 @@ router.get('/leads', authenticateToken, enforceInitiative(), getLeads);
 
 **Debugging Steps:**
 ```typescript
-console.log('[Debug] D365 Filter:', req.d365Filter);
-console.log('[Debug] OData Query:', oDataFilter);
+// Check the security context
+this.logger.info('D365 Filter:', req.d365Filter);
+this.logger.info('OData Query:', oDataFilter);
+
+// Enable retry logging
+private readonly retryOptions: RetryOptions = {
+  logger: (msg, data) => this.logger.debug(`[Retry] ${msg}`, data)
+};
 ```
 
 #### "tc_eclead_tc_ecleadsvolunteerorg_eclead" Syntax Error
@@ -48,6 +54,34 @@ Note the closing parenthesis placement.
 #### Option Set Values Returning Numbers
 **Cause:** Forgot to map D365 integers to strings
 **Solution:** Use mapping helpers:
+
+### Retry & Network Issues
+
+#### "Operation failed after 4 attempts"
+**Cause:** D365 service persistently unavailable
+**Common Scenarios:**
+- D365 maintenance window
+- Rate limiting (429 errors)
+- Network connectivity issues
+
+**Solutions:**
+1. Check D365 service health
+2. Implement circuit breaker pattern for persistent failures
+3. Monitor retry metrics in logs
+
+#### Slow Response Times
+**Cause:** Retry logic adding latency
+**Debugging:**
+```typescript
+// Look for retry attempts in logs
+[LeadService] [Retry] Executing attempt 2/4
+[LeadService] [Retry] Retryable error occurred, waiting before retry
+```
+
+**Solutions:**
+1. Reduce retry attempts for user-facing operations
+2. Implement request caching where appropriate
+3. Use background jobs for non-critical operations
 ```typescript
 import { mapLeadStatus, mapLeadType } from '../constants/d365-mappings';
 status: mapLeadStatus(d365Lead.tc_ecleadlifecyclestatus)

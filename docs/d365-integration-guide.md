@@ -143,6 +143,25 @@ const token = await getOnBehalfOfToken({
 });
 ```
 
+## Error Handling & Retry Logic
+
+### Automatic Retry
+All D365 API calls include automatic retry with exponential backoff:
+- **Retryable errors**: 429 (rate limit), 500, 502, 503, 504
+- **Network errors**: ECONNRESET, ETIMEDOUT, AbortError
+- **Max attempts**: 3 (configurable)
+- **Backoff**: 1s → 2s → 4s (with jitter)
+
+### Error Parsing
+D365 errors are automatically parsed to user-friendly messages:
+```typescript
+// Raw D365 error
+{ error: { code: "0x80040265", message: "Entity not found" } }
+
+// Parsed error
+AppError: "The requested record was not found"
+```
+
 ## Best Practices
 
 ### 1. Query Optimization
