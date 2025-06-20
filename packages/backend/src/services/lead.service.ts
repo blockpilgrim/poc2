@@ -4,7 +4,7 @@ import { getInitiativeIdFromGuid } from '../config/initiatives.config';
 import { AppError } from '../utils/errors';
 import { escapeODataString, buildContainsExpression, combineFilters, buildD365Url } from '../utils/d365/odata-utils';
 import { auditLogger, SecurityEventType } from '../utils/d365/audit-logger';
-import { parseD365FetchError } from '../utils/d365/error-parser';
+import { parseD365FetchError, formatErrorForLogging, createAppErrorFromD365, parseD365Error } from '../utils/d365/error-parser';
 import { withRetry, RetryOptions } from '../utils/d365/retry-helper';
 import { createLogger } from '../utils/logger';
 import { 
@@ -54,6 +54,42 @@ interface D365EveryChildLead {
   tc_LeadOwner?: {
     fullname?: string;
   };
+}
+
+/**
+ * OData query parameters for D365 API requests
+ * Provides type safety for query building
+ */
+interface ODataQueryParams {
+  $select: string;
+  $expand: string;
+  $filter?: string;
+  $top?: number;
+  $skip?: number;
+  $orderby?: string;
+  $count?: boolean;
+}
+
+/**
+ * D365 lead query response structure
+ * Strongly typed response from tc_everychildleads endpoint
+ */
+interface D365LeadQueryResponse {
+  value: D365EveryChildLead[];
+  '@odata.count'?: number;
+  '@odata.nextLink'?: string;
+}
+
+/**
+ * Error context for D365 operations
+ * Provides structured information for error handling and logging
+ */
+interface D365ErrorContext {
+  operation: string;
+  entity: string;
+  userId: string;
+  filters?: Record<string, unknown>;
+  resource?: string;
 }
 
 /**
@@ -220,7 +256,7 @@ export class LeadService {
         initiative: initiativeId
       });
       // Return a generic error message to avoid exposing internal details
-      throw new AppError('Invalid initiative configuration', 500);
+      throw AppError.internal('Invalid initiative configuration');
     }
   }
   
@@ -242,6 +278,155 @@ export class LeadService {
   }
   
   /**
+   * Add active record filter to ensure only non-deleted records are returned
+   * @param filters - Array to add filter to
+   */
+  private applyActiveRecordFilter(filters: string[]): void {
+    filters.push(`${D365_LEAD_FIELDS.STATE_CODE} eq ${D365_STATE_CODES.ACTIVE}`);
+  }
+
+  /**
+   * Apply mandatory initiative security filter
+   * CRITICAL: This ensures data isolation between initiatives
+   * 
+   * @param filters - Array to add filter to
+   * @param initiativeFilter - Security context from JWT
+   * @throws AppError if initiative is missing
+   */
+  private applyInitiativeFilter(filters: string[], initiativeFilter: D365Filter): void {
+    if (!initiativeFilter.initiative) {
+      throw AppError.internal(QUERY_ERROR_MESSAGES.MISSING_INITIATIVE);
+    }
+    
+    const d365InitiativeGuid = this.getD365InitiativeGuid(initiativeFilter.initiative);
+    filters.push(`${D365_LEAD_FIELDS.INITIATIVE} eq '${escapeODataString(d365InitiativeGuid)}'`);
+  }
+
+  /**
+   * Validate organization lead type format
+   * Security: Ensures organization type data is valid before using in filters
+   * 
+   * @param organizationLeadType - Comma-separated organization type values
+   * @param initiativeFilter - Security context for logging
+   * @throws AppError if format is invalid
+   */
+  private async validateOrganizationType(
+    organizationLeadType: string,
+    initiativeFilter: D365Filter
+  ): Promise<void> {
+    if (!isValidOrganizationLeadType(organizationLeadType)) {
+      await this.logOrganizationValidationFailure(
+        initiativeFilter,
+        'INVALID_FORMAT',
+        { errorMessage: 'Invalid organizationLeadType format' }
+      );
+      throw AppError.badRequest('Invalid organization configuration');
+    }
+  }
+
+  /**
+   * Build organization-based filters for lead assignment
+   * Determines which organization fields to filter based on user's organization type
+   * 
+   * @param initiativeFilter - Security context containing organization info
+   * @returns Array of organization filter expressions
+   * @throws AppError if organization configuration is invalid
+   */
+  private async buildOrganizationFilters(initiativeFilter: D365Filter): Promise<string[]> {
+    const orgFilters: string[] = [];
+    
+    if (!initiativeFilter.organizationId) {
+      return orgFilters;
+    }
+
+    if (!initiativeFilter.organizationLeadType) {
+      await this.logOrganizationValidationFailure(
+        initiativeFilter,
+        'MISSING_TYPE',
+        { errorMessage: 'Missing organizationLeadType in JWT' }
+      );
+      throw AppError.badRequest('Missing organization type configuration');
+    }
+
+    // Validate organization type format
+    await this.validateOrganizationType(initiativeFilter.organizationLeadType, initiativeFilter);
+
+    // Foster organization filter
+    if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.FOSTER)) {
+      orgFilters.push(`${D365_LEAD_FIELDS.FOSTER_ORGANIZATION} eq '${escapeODataString(initiativeFilter.organizationId)}'`);
+    }
+    
+    // Volunteer organization filter (1:N relationship to junction entity)
+    if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.VOLUNTEER)) {
+      orgFilters.push(
+        `${D365_LEAD_FIELDS.VOLUNTEER_ORG_RELATIONSHIP}/any(o:o/_tc_volunteerorganization_value eq '${escapeODataString(initiativeFilter.organizationId)}')`
+      );
+    }
+
+    return orgFilters;
+  }
+
+  /**
+   * Apply user-provided search and filter criteria
+   * @param filters - Array to add filters to
+   * @param userFilters - Optional user-provided filters
+   */
+  private applyUserSearchFilters(filters: string[], userFilters?: LeadFilters): void {
+    if (!userFilters) return;
+
+    // Search filter (searches across lead name)
+    if (userFilters.search) {
+      filters.push(buildContainsExpression(D365_LEAD_FIELDS.NAME, userFilters.search));
+    }
+  }
+
+  /**
+   * Handle D365 query errors with proper context and logging
+   * @param error - The error that occurred
+   * @param context - Context information for debugging
+   * @throws AppError with appropriate status code and message
+   */
+  private async handleD365QueryError(
+    error: unknown,
+    context: D365ErrorContext
+  ): Promise<never> {
+    if (error instanceof AppError) {
+      // Already properly formatted, just log and rethrow
+      this.logger.error(`${context.operation} failed`, error, {
+        entity: context.entity,
+        userId: context.userId,
+        filters: context.filters,
+        resource: context.resource
+      });
+      throw error;
+    }
+
+    // Parse D365-specific errors
+    if (error && typeof error === 'object' && 'status' in error && typeof (error as any).status === 'number') {
+      const parsedError = await parseD365Error(error as Response);
+      this.logger.error(formatErrorForLogging(parsedError), undefined, {
+        operation: context.operation,
+        entity: context.entity,
+        userId: context.userId,
+        filters: context.filters
+      });
+      
+      // Special handling for specific error codes
+      if (parsedError.statusCode === 404) {
+        throw AppError.notFound(context.resource || 'Resource');
+      } else if (parsedError.statusCode === 403) {
+        throw AppError.forbidden('Access denied to requested resource');
+      }
+      
+      throw createAppErrorFromD365(parsedError);
+    }
+
+    // Generic error handling
+    this.logger.error(`Unexpected error in ${context.operation}`, error, context);
+    throw AppError.internal(`Failed to ${context.operation}`);
+  }
+
+  /**
    * Build secure OData filter that ALWAYS includes initiative constraint
    * This is the primary security mechanism preventing cross-initiative data access
    * 
@@ -256,74 +441,77 @@ export class LeadService {
     const filters: string[] = [];
     
     // 1. Always filter for active records only
-    filters.push(`${D365_LEAD_FIELDS.STATE_CODE} eq ${D365_STATE_CODES.ACTIVE}`);
+    this.applyActiveRecordFilter(filters);
     
     // 2. CRITICAL: Always include initiative filter (non-negotiable)
-    if (!initiativeFilter.initiative) {
-      throw new AppError(QUERY_ERROR_MESSAGES.MISSING_INITIATIVE, 500);
-    }
-    
-    // Convert initiative ID to D365 GUID
-    const d365InitiativeGuid = this.getD365InitiativeGuid(initiativeFilter.initiative);
-    
-    filters.push(`${D365_LEAD_FIELDS.INITIATIVE} eq '${escapeODataString(d365InitiativeGuid)}'`);
+    this.applyInitiativeFilter(filters, initiativeFilter);
     
     // 3. Organization-based assignment filter
-    // CRITICAL: Use organizationLeadType from JWT to determine correct filter
     if (initiativeFilter.organizationId) {
-      const orgFilters: string[] = [];
-      
-      // Validate organizationLeadType format if present
-      if (initiativeFilter.organizationLeadType) {
-        // Validate format: should be comma-separated numbers
-        if (!isValidOrganizationLeadType(initiativeFilter.organizationLeadType)) {
-          await this.logOrganizationValidationFailure(
-            initiativeFilter,
-            'INVALID_FORMAT',
-            { errorMessage: 'Invalid organizationLeadType format' }
-          );
-          // Security: Return empty results for invalid data
-          throw new AppError('Invalid organization configuration', 400);
+      try {
+        const orgFilters = await this.buildOrganizationFilters(initiativeFilter);
+        if (orgFilters.length > 0) {
+          filters.push(`(${orgFilters.join(' or ')})`);
         }
-        
-        // Foster organization filter
-        if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.FOSTER)) {
-          orgFilters.push(`${D365_LEAD_FIELDS.FOSTER_ORGANIZATION} eq '${initiativeFilter.organizationId}'`);
-        }
-        
-        // Volunteer organization filter (1:N relationship to junction entity)
-        if (hasOrganizationType(initiativeFilter.organizationLeadType, ORGANIZATION_LEAD_TYPE.VOLUNTEER)) {
-          orgFilters.push(`${D365_LEAD_FIELDS.VOLUNTEER_ORG_RELATIONSHIP}/any(o:o/_tc_volunteerorganization_value eq '${initiativeFilter.organizationId}')`);
-        }
-      } else {
-        // Security: No organizationLeadType means the user's JWT is incomplete
-        await this.logOrganizationValidationFailure(
-          initiativeFilter,
-          'MISSING_TYPE',
-          { errorMessage: 'Missing organizationLeadType in JWT' }
-        );
-        // Throw error to be handled by getLeads
-        throw new AppError('Missing organization type configuration', 400);
-      }
-      
-      if (orgFilters.length > 0) {
-        filters.push(`(${orgFilters.join(' or ')})`);
+      } catch (error) {
+        // Re-throw - error already logged in buildOrganizationFilters
+        throw error;
       }
     }
     
-    // Add user-provided filters
-    if (userFilters) {
-      // Search filter (searches across lead name)
-      if (userFilters.search) {
-        filters.push(buildContainsExpression(D365_LEAD_FIELDS.NAME, userFilters.search));
-      }
-    }
+    // 4. Add user-provided filters
+    this.applyUserSearchFilters(filters, userFilters);
     
     return combineFilters(filters, 'and');
   }
   
   /**
+   * Build OData query parameters object for D365 API
+   * @param options - Query options for pagination and sorting
+   * @param filter - OData filter string
+   * @returns OData query parameters object
+   */
+  private buildODataQueryParams(options: D365QueryOptions, filter?: string): ODataQueryParams {
+    const params: ODataQueryParams = {
+      $select: this.selectClause,
+      $expand: this.expandClause,
+      $count: true
+    };
+
+    if (filter) {
+      params.$filter = filter;
+    }
+
+    // Pagination
+    if (options.limit) {
+      params.$top = Math.min(options.limit, D365_QUERY_DEFAULTS.MAX_PAGE_SIZE);
+    }
+    if (options.offset) {
+      params.$skip = options.offset;
+    }
+
+    // Sorting
+    if (options.orderBy) {
+      const d365Field = mapLeadSortField(options.orderBy);
+      if (d365Field) {
+        const direction = options.orderDirection === 'asc' ? ' asc' : ' desc';
+        params.$orderby = `${d365Field}${direction}`;
+      } else {
+        this.logger.warn('Unknown sort field, using default', { field: options.orderBy });
+        params.$orderby = `${D365_QUERY_DEFAULTS.SORT_FIELD} ${D365_QUERY_DEFAULTS.SORT_ORDER}`;
+      }
+    } else {
+      params.$orderby = `${D365_QUERY_DEFAULTS.SORT_FIELD} ${D365_QUERY_DEFAULTS.SORT_ORDER}`;
+    }
+
+    return params;
+  }
+
+  /**
    * Build OData query parameters for tc_everychildlead
+   * @param options - Query options for pagination and sorting
+   * @returns Query string for OData request
+   * @deprecated Use buildODataQueryParams instead
    */
   private buildODataQuery(options: D365QueryOptions): string {
     const params: string[] = [];
@@ -367,6 +555,10 @@ export class LeadService {
   /**
    * Map D365 tc_everychildlead to our Lead interface
    * Includes data from expanded lookups with null safety
+   * 
+   * @param d365Lead - Raw lead data from D365
+   * @param userOrganization - User's organization context
+   * @returns Mapped Lead object
    */
   private mapD365ToLead(
     d365Lead: D365EveryChildLead,
@@ -438,7 +630,7 @@ export class LeadService {
       // Get D365 access token
       const token = await d365Service.getAccessToken();
       if (!token) {
-        throw new AppError('Unable to authenticate with D365', 500);
+        throw AppError.internal('Unable to authenticate with D365');
       }
       
       // Build secure filter
@@ -476,12 +668,12 @@ export class LeadService {
       );
       
       // Build D365 query URL with all parameters
-      const queryString = this.buildODataQuery(options);
+      const queryParams = this.buildODataQueryParams(options, oDataFilter);
       const url = buildD365Url(
         process.env.D365_URL!, 
         'tc_everychildleads',
         undefined,
-        { $filter: oDataFilter, ...Object.fromEntries(new URLSearchParams(queryString)) }
+        queryParams
       );
       
       // Log the full query for debugging (without sensitive token)
@@ -494,11 +686,7 @@ export class LeadService {
         filter: oDataFilter
       });
       
-      const data = await response.json() as { 
-        value: D365EveryChildLead[]; 
-        '@odata.count'?: number; 
-        '@odata.nextLink'?: string 
-      };
+      const data = await response.json() as D365LeadQueryResponse;
       
       // Map results with user organization context
       const userOrganization = this.buildUserOrganization(initiativeFilter);
@@ -521,9 +709,12 @@ export class LeadService {
         nextLink: data['@odata.nextLink']
       };
     } catch (error) {
-      this.logger.error('Error fetching leads', error);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to fetch leads', 500);
+      await this.handleD365QueryError(error, {
+        operation: 'fetch leads',
+        entity: 'tc_everychildleads',
+        userId: initiativeFilter.userId || 'unknown',
+        filters: { initiativeFilter, userFilters: filters }
+      });
     }
   }
   
@@ -552,11 +743,11 @@ export class LeadService {
       // Get D365 access token
       const token = await d365Service.getAccessToken();
       if (!token) {
-        throw new AppError('Unable to authenticate with D365', 500);
+        throw AppError.internal('Unable to authenticate with D365');
       }
       
       // Build URL using consistent utility
-      const queryOptions = {
+      const queryOptions: ODataQueryParams = {
         $select: this.selectClause,
         $expand: this.expandClause
       };
@@ -618,9 +809,12 @@ export class LeadService {
       
       return this.mapD365ToLead(d365Lead, userOrganization);
     } catch (error) {
-      this.logger.error('Error fetching lead', error);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to fetch lead', 500);
+      await this.handleD365QueryError(error, {
+        operation: 'fetch lead',
+        entity: 'tc_everychildleads',
+        userId: initiativeFilter.userId || 'unknown',
+        resource: `lead:${leadId}`
+      });
     }
   }
   
