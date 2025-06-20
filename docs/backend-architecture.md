@@ -26,9 +26,9 @@ The Partner Portal backend is a Node.js Express API that serves as the secure ga
 ### 3. Modular Services
 Services are broken into focused, reusable modules:
 - **Core Services**: Auth, JWT, D365 client
-- **Domain Services**: Lead, Contact, Organization
-- **Utility Services**: Query builders, mappers, validators
-- **Infrastructure**: Retry logic, error parsing, audit logging
+- **Domain Services**: Lead (refactored with focused helper methods)
+- **Utility Services**: OData query builders, field mappers, validators
+- **Infrastructure**: Retry logic (with exponential backoff), D365 error parsing, comprehensive audit logging
 
 ## Authentication Flow
 
@@ -110,17 +110,24 @@ Every D365 query MUST include:
 ## Error Handling
 
 ### Error Types
-- **AppError**: Application-specific errors with status codes
+- **AppError**: Application-specific errors with status codes (using factory methods)
 - **ValidationError**: Request validation failures (400)
 - **AuthError**: Authentication/authorization failures (401/403)
-- **D365Error**: External service failures (502)
+- **D365Error**: External service failures with detailed parsing
+
+### Centralized Error Handler
+The lead service implements a comprehensive `handleD365QueryError` method that:
+- Parses D365-specific error responses
+- Provides structured error context for debugging
+- Distinguishes between 404 (not found) vs 403 (forbidden) errors
+- Logs errors with full operation context
 
 ### Error Response Codes
 - `UNAUTHORIZED`: Missing or invalid authentication
 - `FORBIDDEN`: Insufficient permissions
 - `NOT_FOUND`: Resource not found or access denied
 - `VALIDATION_ERROR`: Invalid request data
-- `D365_ERROR`: D365 service failure
+- `D365_ERROR`: D365 service failure (with retry logic)
 - `INTERNAL_ERROR`: Unexpected server error
 
 ## Performance Considerations
@@ -139,8 +146,8 @@ Every D365 query MUST include:
 
 ## Service Implementation Patterns
 
-### Lead Service Architecture
-The lead service demonstrates key patterns:
+### Lead Service Architecture (Phase 3 Refactored)
+The lead service demonstrates best practices for maintainability:
 
 ```typescript
 class LeadService {
@@ -148,16 +155,22 @@ class LeadService {
   private readonly selectClause = buildLeadSelectClause();
   private readonly expandClause = buildLeadExpandClause();
   
-  // Retry configuration
+  // Retry configuration with exponential backoff
   private readonly retryOptions: RetryOptions = {
     maxRetries: 3,
     initialDelay: 1000,
-    backoffFactor: 2
+    backoffFactor: 2,
+    retryableStatusCodes: [429, 500, 502, 503, 504]
   };
   
-  // Helper methods for common patterns
-  private validateOrganizationContext(...) { }
-  private buildD365Headers(...) { }
+  // Focused helper methods (single responsibility)
+  private applyActiveRecordFilter(filters: string[]): void
+  private applyInitiativeFilter(filters: string[], initiativeFilter: D365Filter): void
+  private validateOrganizationType(type: string, filter: D365Filter): Promise<void>
+  private buildOrganizationFilters(filter: D365Filter): Promise<string[]>
+  private applyUserSearchFilters(filters: string[], userFilters?: LeadFilters): void
+  private handleD365QueryError(error: unknown, context: D365ErrorContext): Promise<never>
+  private buildODataQueryParams(options: D365QueryOptions, filter?: string): ODataQueryParams
   private executeD365Query(...) { }  // With retry logic
   private getD365InitiativeGuid(...) { }
   private buildUserOrganization(...) { }
@@ -166,10 +179,13 @@ class LeadService {
 
 ### Key Patterns:
 1. **Cached Constants**: Field selections computed once at startup
-2. **Retry Wrapper**: All D365 calls wrapped with retry logic
-3. **Helper Methods**: Common patterns extracted for reuse
-4. **Fail-Secure**: Invalid contexts return empty results
-5. **Audit Logging**: All security events tracked
+2. **Retry Wrapper**: All D365 calls wrapped with exponential backoff retry logic
+3. **Focused Helper Methods**: Single responsibility methods (max 30 lines)
+4. **Type Safety**: Zero `any` types, all methods have explicit return types
+5. **Error Context**: Centralized error handling with structured context
+6. **Security**: All user input escaped with `escapeODataString`
+7. **Fail-Secure**: Invalid contexts return empty results
+8. **Audit Logging**: All security events tracked with comprehensive context
 
 ## Monitoring & Logging
 

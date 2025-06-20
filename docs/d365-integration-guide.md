@@ -270,6 +270,22 @@ Note: Replace with actual Initiative GUID from D365
 /tc_everychildleads?$filter=contains(tc_name,'Smith')
 ```
 
+## Error Handling
+
+### D365 Error Parser
+The backend includes a comprehensive D365 error parser that:
+- Extracts meaningful error information from D365 responses
+- Maps D365 error codes to user-friendly messages
+- Determines if errors are retryable
+- Provides formatted error logging
+
+### Retry Logic
+All D365 API calls are wrapped with retry logic:
+- Exponential backoff: 1s → 2s → 4s
+- Retryable status codes: 429, 500, 502, 503, 504
+- Maximum 3 retry attempts
+- Jitter to prevent thundering herd
+
 ## Performance Monitoring
 
 ### Key Metrics
@@ -277,13 +293,15 @@ Note: Replace with actual Initiative GUID from D365
 - Payload size
 - Number of expanded entities
 - Token refresh frequency
+- Retry attempts and success rate
 
 ### Optimization Strategies
 1. Cache access tokens (until expiry)
-2. Use field selection ($select)
-3. Implement pagination
+2. Use field selection ($select) - cached at service startup
+3. Implement pagination (default: 50, max: 100)
 4. Avoid N+1 queries
 5. Batch related operations
+6. Build OData query parameters directly (no string parsing)
 
 ## Security Considerations
 

@@ -93,10 +93,15 @@ Get paginated list of leads for user's initiative/organization.
 
 **Query Parameters:**
 - `page`: Page number (default: 1)
-- `limit`: Results per page (max: 100)
+- `limit`: Results per page (default: 50, max: 100)
 - `search`: Search term for lead names
-- `sortBy`: Field to sort by
-- `sortOrder`: 'asc' or 'desc'
+- `sortBy`: Field to sort by (name, status, type, createdAt, updatedAt)
+- `sortOrder`: 'asc' or 'desc' (default: 'desc')
+
+**Security:**
+- Mandatory initiative filtering based on JWT
+- Organization-based assignment filtering
+- All filters are cumulative (AND condition)
 
 **Response:**
 ```typescript

@@ -109,6 +109,27 @@ if (tokenExpiresAt < Date.now() + 60000) { // 1 min buffer
 }
 ```
 
+### Retry Logic Debugging
+
+#### Monitoring Retry Attempts
+The retry helper logs all attempts:
+```
+[Retry] Attempt 1 failed with status 429. Retrying in 1000ms...
+[Retry] Attempt 2 failed with status 429. Retrying in 2000ms...
+[Retry] Attempt 3 succeeded
+```
+
+#### Adjusting Retry Configuration
+Configure retry behavior in service:
+```typescript
+private readonly retryOptions: RetryOptions = {
+  maxRetries: 3,
+  initialDelay: 1000,
+  backoffFactor: 2,
+  retryableStatusCodes: [429, 500, 502, 503, 504]
+};
+```
+
 ### Development Environment
 
 #### "D365_URL is not defined"
